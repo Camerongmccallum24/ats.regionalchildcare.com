@@ -89,6 +89,39 @@ class InterviewTypeEnum(str, Enum):
     video = "video"
     in_person = "in_person"
 
+class UserRoleEnum(str, Enum):
+    admin = "admin"
+    recruiter = "recruiter"
+    manager = "manager"
+    viewer = "viewer"
+
+class TemplateTypeEnum(str, Enum):
+    application_received = "application_received"
+    interview_invitation = "interview_invitation"
+    status_update = "status_update"
+    offer_letter = "offer_letter"
+    rejection_letter = "rejection_letter"
+    welcome_email = "welcome_email"
+    reminder = "reminder"
+
+class DocumentTypeEnum(str, Enum):
+    resume = "resume"
+    cover_letter = "cover_letter"
+    certificate = "certificate"
+    identification = "identification"
+    visa_document = "visa_document"
+    reference = "reference"
+    other = "other"
+
+class AuditActionEnum(str, Enum):
+    create = "create"
+    update = "update"
+    delete = "delete"
+    view = "view"
+    download = "download"
+    send_email = "send_email"
+    schedule_interview = "schedule_interview"
+
 # Models
 class Job(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
