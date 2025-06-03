@@ -560,9 +560,9 @@ async def update_candidate(candidate_id: str, candidate_data: CandidateCreate):
     candidate_dict = candidate_data.dict()
     candidate_dict["updated_at"] = datetime.utcnow()
     
-    # Recalculate score
+    # Recalculate score with enhanced algorithm
     temp_candidate = Candidate(**{**candidate_dict, "id": candidate_id})
-    candidate_dict["score"] = calculate_candidate_score(temp_candidate)
+    candidate_dict["score"] = enhanced_calculate_candidate_score(temp_candidate)
     
     result = await db.candidates.update_one(
         {"id": candidate_id},
