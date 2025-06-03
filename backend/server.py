@@ -234,6 +234,137 @@ async def send_email(to_email: str, subject: str, content: str):
         logging.error(f"Failed to send email: {e}")
         return False
 
+# Resume parsing functions
+def parse_pdf_resume(file_content: bytes) -> dict:
+    """Extract text and basic information from PDF resume"""
+    try:
+        pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+        text = ""
+        for page in pdf_reader.pages:
+            text += page.extract_text() + "\n"
+        
+        # Basic information extraction
+        info = {
+            "text": text,
+            "skills": extract_skills_from_text(text),
+            "education": extract_education_from_text(text),
+            "work_history": extract_work_history_from_text(text)
+        }
+        return info
+    except Exception as e:
+        logging.error(f"Failed to parse PDF: {e}")
+        return {"text": "", "skills": [], "education": None, "work_history": None}
+
+def extract_skills_from_text(text: str) -> List[str]:
+    """Extract childcare-related skills from resume text"""
+    childcare_skills = [
+        "early childhood education", "child development", "curriculum planning",
+        "behavior management", "first aid", "cpr", "working with children check",
+        "montessori", "steiner", "reggio emilia", "play-based learning",
+        "observation", "documentation", "family engagement", "multicultural",
+        "special needs", "inclusive practices", "outdoor play", "nutrition",
+        "safety procedures", "team collaboration", "communication"
+    ]
+    
+    found_skills = []
+    text_lower = text.lower()
+    for skill in childcare_skills:
+        if skill in text_lower:
+            found_skills.append(skill.title())
+    
+    return found_skills
+
+def extract_education_from_text(text: str) -> Optional[str]:
+    """Extract education information from resume text"""
+    education_patterns = [
+        r"certificate.*early childhood",
+        r"diploma.*early childhood",
+        r"bachelor.*education",
+        r"master.*education",
+        r"cert.*iii.*early childhood",
+        r"cert.*iv.*early childhood"
+    ]
+    
+    for pattern in education_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(0)
+    
+    return None
+
+def extract_work_history_from_text(text: str) -> Optional[str]:
+    """Extract basic work history from resume text"""
+    # Look for common work history indicators
+    work_patterns = [
+        r"(educator|teacher|assistant|coordinator|director|supervisor).*(\d{4}|\d{1,2}\s+years?)",
+        r"(\d{4})\s*-\s*(\d{4}|present)",
+        r"(\d{1,2})\s+years?\s+experience"
+    ]
+    
+    work_info = []
+    for pattern in work_patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        work_info.extend(matches)
+    
+    return str(work_info) if work_info else None
+
+def enhanced_calculate_candidate_score(candidate: Candidate, job: Job = None) -> float:
+    """Enhanced rules-based scoring for candidates with more sophisticated logic"""
+    score = 0.0
+    
+    # Experience score (0-3 points) - weighted higher
+    if candidate.experience_years >= 5:
+        score += 3.0
+    elif candidate.experience_years >= 3:
+        score += 2.5
+    elif candidate.experience_years >= 1:
+        score += 1.5
+    elif candidate.experience_years > 0:
+        score += 0.5
+    
+    # Visa eligibility (0-3 points)
+    if not candidate.sponsorship_needed:
+        score += 3.0
+    elif candidate.visa_status == VisaStatusEnum.temporary:
+        score += 1.5
+    elif candidate.visa_status == VisaStatusEnum.needs_sponsorship:
+        score += 0.5  # Still possible but requires work
+    
+    # Rural experience bonus (0-2 points)
+    if candidate.rural_experience:
+        score += 2.0
+    
+    # English proficiency (0-1.5 points)
+    if candidate.english_level == EnglishLevelEnum.native:
+        score += 1.5
+    elif candidate.english_level == EnglishLevelEnum.fluent:
+        score += 1.2
+    elif candidate.english_level == EnglishLevelEnum.good:
+        score += 0.8
+    else:
+        score += 0.3
+    
+    # Qualifications bonus (0-1 point)
+    if candidate.childcare_cert:
+        if "certificate iii" in candidate.childcare_cert.lower():
+            score += 1.0
+        elif "diploma" in candidate.childcare_cert.lower():
+            score += 1.2
+        elif "bachelor" in candidate.childcare_cert.lower():
+            score += 1.5
+    
+    # Skills bonus (0-0.5 points)
+    if candidate.skills:
+        score += min(len(candidate.skills) * 0.1, 0.5)
+    
+    # Availability and willingness (0-0.5 points)
+    if candidate.relocation_willing == RelocationWillingnessEnum.yes:
+        score += 0.5
+    elif candidate.relocation_willing == RelocationWillingnessEnum.maybe:
+        score += 0.2
+    
+    return min(score, 10.0)  # Cap at 10
+
 def calculate_candidate_score(candidate: Candidate, job: Job = None) -> float:
     """Simple rules-based scoring for candidates"""
     score = 0.0
@@ -265,6 +396,78 @@ def calculate_candidate_score(candidate: Candidate, job: Job = None) -> float:
         score += 1.0
     
     return min(score, 10.0)  # Cap at 10
+
+# Visa pre-qualification function
+def evaluate_visa_sponsorship_eligibility(candidate: Candidate) -> dict:
+    """Enhanced visa sponsorship pre-qualification"""
+    result = {
+        "eligible": False,
+        "reason": "",
+        "visa_pathway": None,
+        "requirements": [],
+        "score": 0
+    }
+    
+    # Check basic eligibility
+    if not candidate.sponsorship_needed:
+        result["eligible"] = True
+        result["reason"] = "No sponsorship required"
+        result["score"] = 10
+        return result
+    
+    # Age factor (assuming under 45 is preferred)
+    age_score = 3  # Default assume good age
+    
+    # English requirement
+    english_score = 0
+    if candidate.english_level in [EnglishLevelEnum.native, EnglishLevelEnum.fluent]:
+        english_score = 3
+    elif candidate.english_level == EnglishLevelEnum.good:
+        english_score = 2
+        result["requirements"].append("IELTS test may be required")
+    else:
+        english_score = 0
+        result["requirements"].append("English proficiency improvement required")
+    
+    # Experience score
+    exp_score = 0
+    if candidate.experience_years >= 3:
+        exp_score = 3
+    elif candidate.experience_years >= 1:
+        exp_score = 2
+        result["requirements"].append("Skills assessment required")
+    else:
+        exp_score = 0
+        result["requirements"].append("Minimum 1 year experience required")
+    
+    # Qualifications
+    qual_score = 0
+    if candidate.childcare_cert:
+        if any(qual in candidate.childcare_cert.lower() for qual in ["certificate iii", "diploma", "bachelor"]):
+            qual_score = 3
+        else:
+            qual_score = 1
+            result["requirements"].append("Australian qualification assessment required")
+    else:
+        result["requirements"].append("Relevant childcare qualification required")
+    
+    total_score = age_score + english_score + exp_score + qual_score
+    result["score"] = total_score
+    
+    # Determine visa pathway and eligibility
+    if total_score >= 9:
+        result["eligible"] = True
+        result["visa_pathway"] = "482 Temporary Skill Shortage visa → 186 Permanent"
+        result["reason"] = "Strong candidate for visa sponsorship"
+    elif total_score >= 6:
+        result["eligible"] = True
+        result["visa_pathway"] = "482 Temporary Skill Shortage visa"
+        result["reason"] = "Eligible with some requirements to meet"
+    else:
+        result["eligible"] = False
+        result["reason"] = "Does not meet minimum requirements for sponsorship"
+        
+    return result
 
 # API Routes
 
