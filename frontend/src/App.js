@@ -129,7 +129,7 @@ function App() {
     fetchJobs();
     fetchCandidates();
     fetchApplications();
-    fetchDashboardStats();
+    fetchInterviews();
   }, []);
 
   // Navigation Component
