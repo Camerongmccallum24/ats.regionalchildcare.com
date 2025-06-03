@@ -157,11 +157,11 @@ frontend:
     file: "/app/frontend/src/App.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Built comprehensive React frontend with Dashboard (metrics, pipeline overview), Job Management (create/edit jobs with sponsorship flags), Candidate Management (full CRUD with scoring display), and Application Management (status tracking, bulk actions). Beautiful Tailwind CSS styling with responsive design."
+        comment: "Built comprehensive React frontend with Dashboard (metrics, pipeline overview), Job Management (create/edit jobs with sponsorship flags), Candidate Management (full CRUD with scoring display), and Application Management (status tracking, bulk actions). Beautiful Tailwind CSS styling with responsive design. User has granted permission for automated frontend testing."
 
   - task: "Dashboard and Analytics"
     implemented: true
