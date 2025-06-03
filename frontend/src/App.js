@@ -853,7 +853,7 @@ function App() {
       try {
         await axios.post(`${API}/applications`, applicationForm);
         await fetchApplications();
-        await fetchDashboardStats();
+        await fetchInterviews();
         setShowApplicationForm(false);
         setApplicationForm({
           job_id: "",
