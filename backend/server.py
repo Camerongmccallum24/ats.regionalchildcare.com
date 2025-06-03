@@ -707,6 +707,181 @@ async def bulk_update_applications(
     
     return {"updated_count": result.modified_count}
 
+# Resume upload and parsing
+@api_router.post("/candidates/{candidate_id}/upload-resume")
+async def upload_resume(candidate_id: str, file: UploadFile = File(...)):
+    # Check if candidate exists
+    candidate = await db.candidates.find_one({"id": candidate_id})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    
+    try:
+        # Read file content
+        file_content = await file.read()
+        
+        # Parse resume based on file type
+        parsed_data = {"text": "", "skills": [], "education": None, "work_history": None}
+        
+        if file.filename.lower().endswith('.pdf'):
+            parsed_data = parse_pdf_resume(file_content)
+        else:
+            # For non-PDF files, store as base64
+            parsed_data["text"] = "Non-PDF file uploaded"
+        
+        # Convert file to base64 for storage
+        file_base64 = base64.b64encode(file_content).decode('utf-8')
+        resume_url = f"data:{file.content_type};base64,{file_base64}"
+        
+        # Update candidate with parsed resume data
+        update_data = {
+            "resume_url": resume_url,
+            "resume_text": parsed_data["text"],
+            "skills": parsed_data["skills"],
+            "education": parsed_data["education"],
+            "work_history": parsed_data["work_history"],
+            "updated_at": datetime.utcnow()
+        }
+        
+        # Recalculate score with enhanced algorithm
+        temp_candidate = Candidate(**{**candidate, **update_data})
+        update_data["score"] = enhanced_calculate_candidate_score(temp_candidate)
+        
+        await db.candidates.update_one(
+            {"id": candidate_id},
+            {"$set": update_data}
+        )
+        
+        return {
+            "message": "Resume uploaded and parsed successfully",
+            "parsed_skills": parsed_data["skills"],
+            "education": parsed_data["education"],
+            "new_score": update_data["score"]
+        }
+        
+    except Exception as e:
+        logging.error(f"Resume upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process resume")
+
+# Visa sponsorship evaluation
+@api_router.get("/candidates/{candidate_id}/visa-evaluation")
+async def get_visa_evaluation(candidate_id: str):
+    candidate = await db.candidates.find_one({"id": candidate_id})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    
+    candidate_obj = Candidate(**candidate)
+    evaluation = evaluate_visa_sponsorship_eligibility(candidate_obj)
+    
+    return evaluation
+
+# Interview management
+@api_router.post("/interviews", response_model=Interview)
+async def create_interview(interview_data: InterviewCreate):
+    # Verify application exists
+    application = await db.applications.find_one({"id": interview_data.application_id})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Create interview
+    interview_dict = interview_data.dict()
+    interview_dict["candidate_id"] = application["candidate_id"]
+    interview_dict["job_id"] = application["job_id"]
+    
+    # Generate meeting link for video interviews
+    if interview_data.interview_type == InterviewTypeEnum.video and not interview_data.meeting_link:
+        interview_dict["meeting_link"] = f"https://meet.grolearning.com/interview-{interview_dict['id'][:8]}"
+    
+    interview = Interview(**interview_dict)
+    
+    await db.interviews.insert_one(interview.dict())
+    
+    # Send interview invitation email
+    candidate = await db.candidates.find_one({"id": interview.candidate_id})
+    job = await db.jobs.find_one({"id": interview.job_id})
+    
+    if candidate and job:
+        interview_details = f"""
+        <p>Dear {candidate['full_name']},</p>
+        <p>We are pleased to invite you for an interview for the position of {job['title']} in {job['location']}.</p>
+        <p><strong>Interview Details:</strong></p>
+        <ul>
+            <li>Date & Time: {interview.scheduled_date.strftime('%A, %B %d, %Y at %I:%M %p')}</li>
+            <li>Duration: {interview.duration_minutes} minutes</li>
+            <li>Type: {interview.interview_type.value.replace('_', ' ').title()}</li>
+        """
+        
+        if interview.meeting_link:
+            interview_details += f"<li>Meeting Link: <a href='{interview.meeting_link}'>{interview.meeting_link}</a></li>"
+        elif interview.location:
+            interview_details += f"<li>Location: {interview.location}</li>"
+            
+        interview_details += f"""
+        </ul>
+        <p>Interviewer: {interview.interviewer_name}</p>
+        <p>Please confirm your attendance by replying to this email.</p>
+        <p>Best regards,<br>GRO Early Learning Recruitment Team</p>
+        """
+        
+        await send_email(
+            candidate["email"],
+            f"Interview Invitation - {job['title']}",
+            interview_details
+        )
+    
+    return interview
+
+@api_router.get("/interviews", response_model=List[Interview])
+async def get_interviews(
+    application_id: Optional[str] = Query(None),
+    candidate_id: Optional[str] = Query(None),
+    status: Optional[InterviewStatusEnum] = Query(None)
+):
+    query = {}
+    if application_id:
+        query["application_id"] = application_id
+    if candidate_id:
+        query["candidate_id"] = candidate_id
+    if status:
+        query["status"] = status
+    
+    interviews = await db.interviews.find(query).sort("scheduled_date", 1).to_list(1000)
+    return [Interview(**interview) for interview in interviews]
+
+@api_router.put("/interviews/{interview_id}", response_model=Interview)
+async def update_interview(interview_id: str, interview_update: InterviewUpdate):
+    update_dict = interview_update.dict(exclude_unset=True)
+    update_dict["updated_at"] = datetime.utcnow()
+    
+    result = await db.interviews.update_one(
+        {"id": interview_id},
+        {"$set": update_dict}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    
+    # Send status update email if status changed
+    if "status" in update_dict:
+        interview = await db.interviews.find_one({"id": interview_id})
+        candidate = await db.candidates.find_one({"id": interview["candidate_id"]})
+        
+        if candidate:
+            status_messages = {
+                "completed": "Your interview has been completed. We will be in touch with next steps soon.",
+                "cancelled": "Your interview has been cancelled. We will contact you to reschedule.",
+                "rescheduled": "Your interview has been rescheduled. Please check the new details."
+            }
+            
+            if update_dict["status"] in status_messages:
+                await send_email(
+                    candidate["email"],
+                    f"Interview Update - {update_dict['status'].title()}",
+                    f"<p>Dear {candidate['full_name']},</p><p>{status_messages[update_dict['status']]}</p><p>Best regards,<br>GRO Early Learning Team</p>"
+                )
+    
+    updated_interview = await db.interviews.find_one({"id": interview_id})
+    return Interview(**updated_interview)
+
 # Include the router in the main app
 app.include_router(api_router)
 
