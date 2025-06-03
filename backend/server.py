@@ -45,6 +45,11 @@ db = client[os.environ['DB_NAME']]
 # SendGrid setup
 sg = sendgrid.SendGridAPIClient(api_key=os.environ.get('SENDGRID_API_KEY'))
 
+# Careers site webhook configuration
+CAREERS_SITE_URL = os.environ.get('CAREERS_SITE_URL', 'https://childcare-career-hub.lovable.app')
+CAREERS_WEBHOOK_SECRET = os.environ.get('CAREERS_WEBHOOK_SECRET', 'gro-careers-webhook-2025')
+CAREERS_WEBHOOK_TIMEOUT = 30  # seconds
+
 # Create the main app without a prefix
 app = FastAPI()
 
