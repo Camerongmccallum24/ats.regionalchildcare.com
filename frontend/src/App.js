@@ -1005,7 +1005,7 @@ function App() {
                         onChange={(e) => updateApplicationStatus(application.id, e.target.value)}
                         className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-purple-500"
                       >
-                        {APPLICATION_STATUSES.map(status => (
+                        {INTERVIEW_STATUSES.map(status => (
                           <option key={status.value} value={status.value}>{status.label}</option>
                         ))}
                       </select>
