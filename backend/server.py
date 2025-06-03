@@ -238,6 +238,117 @@ class InterviewUpdate(BaseModel):
     visa_suitability_score: Optional[float] = None
     overall_recommendation: Optional[str] = None
 
+# Advanced Phase 3 Models
+class User(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: str
+    full_name: str
+    role: UserRoleEnum
+    is_active: bool = True
+    password_hash: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_login: Optional[datetime] = None
+
+class UserCreate(BaseModel):
+    email: str
+    full_name: str
+    role: UserRoleEnum
+    password: str
+
+class EmailTemplate(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    subject: str
+    content: str
+    template_type: TemplateTypeEnum
+    merge_fields: List[str] = []  # Available merge fields like {{candidate_name}}, {{job_title}}
+    is_active: bool = True
+    created_by: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class EmailTemplateCreate(BaseModel):
+    name: str
+    subject: str
+    content: str
+    template_type: TemplateTypeEnum
+    merge_fields: List[str] = []
+
+class Document(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    filename: str
+    document_type: DocumentTypeEnum
+    file_url: str  # Base64 encoded or URL
+    file_size: Optional[int] = None
+    mime_type: str
+    uploaded_by: str
+    related_entity_id: str  # candidate_id, job_id, etc.
+    related_entity_type: str  # "candidate", "job", etc.
+    is_confidential: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class AuditLog(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    user_email: str
+    action: AuditActionEnum
+    entity_type: str  # "candidate", "job", "application", etc.
+    entity_id: str
+    details: Dict[str, Any] = {}
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+class ComplianceReport(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    report_type: str  # "eeo", "visa_sponsorship", "hiring_audit"
+    start_date: datetime
+    end_date: datetime
+    data: Dict[str, Any]
+    generated_by: str
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class AdvancedSearchFilter(BaseModel):
+    # Location filters
+    locations: Optional[List[str]] = None
+    
+    # Visa and sponsorship filters
+    visa_status: Optional[List[VisaStatusEnum]] = None
+    sponsorship_needed: Optional[bool] = None
+    
+    # Experience filters
+    min_experience_years: Optional[int] = None
+    max_experience_years: Optional[int] = None
+    rural_experience: Optional[bool] = None
+    
+    # Qualification filters
+    certifications: Optional[List[str]] = None
+    education_level: Optional[List[str]] = None
+    
+    # Score filters
+    min_score: Optional[float] = None
+    max_score: Optional[float] = None
+    
+    # Availability filters
+    available_from: Optional[datetime] = None
+    available_to: Optional[datetime] = None
+    
+    # Relocation filters
+    relocation_willing: Optional[List[RelocationWillingnessEnum]] = None
+    
+    # Skills filters
+    required_skills: Optional[List[str]] = None
+    
+    # Status filters
+    application_status: Optional[List[ApplicationStatusEnum]] = None
+    
+    # Date filters
+    applied_after: Optional[datetime] = None
+    applied_before: Optional[datetime] = None
+    
+    # Text search
+    search_query: Optional[str] = None  # Search in name, email, notes, resume text
+
 class Application(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     job_id: str
