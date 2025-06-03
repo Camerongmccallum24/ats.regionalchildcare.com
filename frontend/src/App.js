@@ -23,13 +23,16 @@ const ENGLISH_LEVELS = [
   { value: "good", label: "Good" },
   { value: "basic", label: "Basic" }
 ];
-const APPLICATION_STATUSES = [
-  { value: "new", label: "New" },
-  { value: "screening", label: "Screening" },
-  { value: "interview", label: "Interview" },
-  { value: "offer", label: "Offer" },
-  { value: "hired", label: "Hired" },
-  { value: "rejected", label: "Rejected" }
+const INTERVIEW_TYPES = [
+  { value: "phone", label: "Phone Interview" },
+  { value: "video", label: "Video Interview" },
+  { value: "in_person", label: "In-Person Interview" }
+];
+const INTERVIEW_STATUSES = [
+  { value: "scheduled", label: "Scheduled" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "rescheduled", label: "Rescheduled" }
 ];
 
 function App() {
