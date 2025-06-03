@@ -48,9 +48,12 @@ function App() {
   const [jobs, setJobs] = useState([]);
   const [candidates, setCandidates] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [interviews, setInterviews] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({});
   const [loading, setLoading] = useState(false);
   const [selectedItems, setSelectedItems] = useState([]);
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const [visaEvaluations, setVisaEvaluations] = useState({});
 
   // Fetch data functions
   const fetchJobs = async () => {
