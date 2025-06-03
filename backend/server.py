@@ -996,6 +996,14 @@ async def create_job(job_data: JobCreate):
     job_dict = job_data.dict()
     job = Job(**job_dict)
     result = await db.jobs.insert_one(job.dict())
+    
+    # Send webhook to careers site
+    webhook_success = await send_job_webhook(job, "created")
+    if webhook_success:
+        logging.info(f"Job {job.id} successfully synced to careers site")
+    else:
+        logging.warning(f"Failed to sync job {job.id} to careers site")
+    
     return job
 
 @api_router.get("/jobs", response_model=List[Job])
