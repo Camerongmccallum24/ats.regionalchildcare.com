@@ -1006,6 +1006,174 @@ async def create_job(job_data: JobCreate):
     
     return job
 
+# Job deletion endpoint with webhook
+@api_router.delete("/jobs/{job_id}")
+async def delete_job(job_id: str):
+    # Check if job exists
+    job = await db.jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Mark job as inactive instead of deleting
+    result = await db.jobs.update_one(
+        {"id": job_id},
+        {"$set": {"status": "deleted", "updated_at": datetime.utcnow()}}
+    )
+    
+    # Send deletion webhook
+    webhook_success = await send_job_deletion_webhook(job_id)
+    if webhook_success:
+        logging.info(f"Job {job_id} deletion successfully synced to careers site")
+    else:
+        logging.warning(f"Failed to sync job {job_id} deletion to careers site")
+    
+    return {"message": "Job deleted successfully", "webhook_sent": webhook_success}
+
+# Webhook Management Endpoints
+@api_router.post("/jobs/{job_id}/sync-to-careers")
+async def manual_sync_job_to_careers(job_id: str):
+    """Manually sync a specific job to careers site"""
+    job = await db.jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job_obj = Job(**job)
+    webhook_success = await send_job_webhook(job_obj, "updated")
+    
+    return {
+        "message": f"Manual sync for job {job_id}",
+        "success": webhook_success,
+        "careers_site": CAREERS_SITE_URL
+    }
+
+@api_router.post("/jobs/bulk-sync-to-careers")
+async def bulk_sync_jobs_to_careers():
+    """Sync all active jobs to careers site"""
+    active_jobs = await db.jobs.find({"status": "active"}).to_list(1000)
+    
+    results = []
+    for job_doc in active_jobs:
+        job = Job(**job_doc)
+        success = await send_job_webhook(job, "updated")
+        results.append({
+            "job_id": job.id,
+            "title": job.title,
+            "success": success
+        })
+        
+        # Add small delay to avoid overwhelming the careers site
+        await asyncio.sleep(0.5)
+    
+    successful_syncs = sum(1 for r in results if r["success"])
+    
+    return {
+        "message": "Bulk sync completed",
+        "total_jobs": len(results),
+        "successful_syncs": successful_syncs,
+        "failed_syncs": len(results) - successful_syncs,
+        "results": results
+    }
+
+@api_router.get("/webhooks/logs")
+async def get_webhook_logs(
+    job_id: Optional[str] = Query(None),
+    limit: int = Query(50, le=200)
+):
+    """Get webhook logs for monitoring"""
+    query = {}
+    if job_id:
+        query["job_id"] = job_id
+    
+    logs = await db.webhook_logs.find(query).sort("sent_at", -1).limit(limit).to_list(limit)
+    return logs
+
+@api_router.get("/webhooks/stats")
+async def get_webhook_stats():
+    """Get webhook statistics"""
+    try:
+        # Total webhooks sent
+        total_webhooks = await db.webhook_logs.count_documents({})
+        
+        # Success rate
+        successful_webhooks = await db.webhook_logs.count_documents({
+            "response_status": {"$gte": 200, "$lt": 300}
+        })
+        
+        # Recent activity (last 24 hours)
+        yesterday = datetime.utcnow() - timedelta(days=1)
+        recent_webhooks = await db.webhook_logs.count_documents({
+            "sent_at": {"$gte": yesterday}
+        })
+        
+        # Error breakdown
+        error_pipeline = [
+            {"$match": {"error_message": {"$ne": None}}},
+            {"$group": {"_id": "$error_message", "count": {"$sum": 1}}}
+        ]
+        errors = await db.webhook_logs.aggregate(error_pipeline).to_list(100)
+        
+        success_rate = (successful_webhooks / total_webhooks * 100) if total_webhooks > 0 else 0
+        
+        return {
+            "total_webhooks": total_webhooks,
+            "successful_webhooks": successful_webhooks,
+            "success_rate": round(success_rate, 2),
+            "recent_activity_24h": recent_webhooks,
+            "careers_site_url": CAREERS_SITE_URL,
+            "common_errors": errors[:5],  # Top 5 errors
+            "last_updated": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        return {"error": f"Failed to get webhook stats: {str(e)}"}
+
+@api_router.post("/webhooks/test")
+async def test_webhook_connection():
+    """Test webhook connection to careers site"""
+    try:
+        test_payload = {
+            "action": "test",
+            "timestamp": datetime.utcnow().isoformat(),
+            "source": "gro_ats",
+            "message": "Test connection from GRO ATS"
+        }
+        
+        payload_json = json.dumps(test_payload, default=str)
+        signature = create_webhook_signature(payload_json, CAREERS_WEBHOOK_SECRET)
+        
+        headers = {
+            "Content-Type": "application/json",
+            "X-Webhook-Signature": f"sha256={signature}",
+            "X-Webhook-Source": "gro-ats",
+            "X-Webhook-Action": "test",
+            "User-Agent": "GRO-ATS-Webhook/1.0"
+        }
+        
+        webhook_url = f"{CAREERS_SITE_URL}/api/webhooks/jobs"
+        
+        async with httpx.AsyncClient(timeout=CAREERS_WEBHOOK_TIMEOUT) as client:
+            response = await client.post(
+                webhook_url,
+                content=payload_json,
+                headers=headers
+            )
+            
+            return {
+                "webhook_url": webhook_url,
+                "status_code": response.status_code,
+                "response_text": response.text[:500],
+                "success": 200 <= response.status_code < 300,
+                "test_time": datetime.utcnow().isoformat()
+            }
+            
+    except Exception as e:
+        return {
+            "webhook_url": f"{CAREERS_SITE_URL}/api/webhooks/jobs",
+            "error": str(e),
+            "success": False,
+            "test_time": datetime.utcnow().isoformat()
+        }
+
 @api_router.get("/jobs", response_model=List[Job])
 async def get_jobs(status: Optional[str] = Query(None)):
     query = {}
