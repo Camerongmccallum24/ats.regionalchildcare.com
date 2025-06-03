@@ -3,6 +3,8 @@ import requests
 import json
 import uuid
 import time
+import os
+import base64
 from datetime import datetime, timedelta
 import unittest
 from unittest.mock import patch
@@ -51,11 +53,36 @@ class GROEarlyLearningATSBackendTest(unittest.TestCase):
             "notes": "Test candidate"
         }
         
+        # Test interview data
+        self.interview_data = {
+            "interviewer_name": f"{self.test_prefix} Interviewer",
+            "interviewer_email": f"{self.test_prefix}_interviewer@example.com",
+            "scheduled_date": (datetime.utcnow() + timedelta(days=7)).isoformat(),
+            "duration_minutes": 60,
+            "interview_type": "video",
+            "location": None
+        }
+        
+        # Sample PDF resume content (base64 encoded minimal PDF)
+        self.sample_pdf_content = base64.b64decode(
+            "JVBERi0xLjcKJeLjz9MKNSAwIG9iago8PAovRmlsdGVyIC9GbGF0ZURlY29kZQovTGVuZ3RoIDM4Cj4+CnN0cmVhbQp4nCvkMlAwMDC0"
+            "NDI1MzY0NbYwMTTUszQyNDNSCOQqVDBUMABCCJGcq5ALAFQ5B0MKZW5kc3RyZWFtCmVuZG9iago0IDAgb2JqCjw8Ci9UeXBlIC9QYWdl"
+            "Ci9NZWRpYUJveCBbMCAwIDYxMiA3OTJdCi9SZXNvdXJjZXMgPDw+PgovQ29udGVudHMgNSAwIFIKL1BhcmVudCAyIDAgUgo+PgplbmRv"
+            "YmoKMiAwIG9iago8PAovVHlwZSAvUGFnZXMKL0tpZHMgWzQgMCBSXQovQ291bnQgMQo+PgplbmRvYmoKMSAwIG9iago8PAovVHlwZSAv"
+            "Q2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL3RyYXBwZWQgKGZhbHNlKQovQ3JlYXRvciAoU2FtcGxlIFJl"
+            "c3VtZSkKL1RpdGxlIChTYW1wbGUgUmVzdW1lKQovQ3JlYXRpb25EYXRlIChEOjIwMjMwNzAxMDAwMDAwWikKL01vZERhdGUgKEQ6MjAy"
+            "MzA3MDEwMDAwMDBaKQovUHJvZHVjZXIgKFNhbXBsZSBQREYgUHJvZHVjZXIpCj4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1"
+            "NTM1IGYgCjAwMDAwMDAyODEgMDAwMDAgbiAKMDAwMDAwMDIzMiAwMDAwMCBuIAowMDAwMDAwMzMwIDAwMDAwIG4gCjAwMDAwMDAxMDkg"
+            "MDAwMDAgbiAKMDAwMDAwMDAxNSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDYKL1Jvb3QgMSAwIFIKL0luZm8gMyAwIFIKPj4Kc3Rh"
+            "cnR4cmVmCjQ5MwolJUVPRgo="
+        )
+        
         # We'll store created resources here for cleanup and further testing
         self.created_resources = {
             "jobs": [],
             "candidates": [],
-            "applications": []
+            "applications": [],
+            "interviews": []
         }
     
     def test_01_create_job(self):
