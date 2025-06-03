@@ -50,10 +50,13 @@ function App() {
   const [applications, setApplications] = useState([]);
   const [interviews, setInterviews] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({});
+  const [advancedAnalytics, setAdvancedAnalytics] = useState({});
   const [loading, setLoading] = useState(false);
   const [selectedItems, setSelectedItems] = useState([]);
   const [uploadingResume, setUploadingResume] = useState(false);
   const [visaEvaluations, setVisaEvaluations] = useState({});
+  const [searchFilters, setSearchFilters] = useState({});
+  const [complianceReports, setComplianceReports] = useState({});
 
   // Fetch data functions
   const fetchJobs = async () => {
