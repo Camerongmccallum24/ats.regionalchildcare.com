@@ -126,6 +126,10 @@ class Candidate(BaseModel):
     score: float = 0.0
     notes: str = ""
     resume_url: Optional[str] = None
+    resume_text: Optional[str] = None  # Parsed resume content
+    skills: List[str] = []  # Extracted skills
+    education: Optional[str] = None  # Extracted education
+    work_history: Optional[str] = None  # Extracted work history
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -146,6 +150,48 @@ class CandidateCreate(BaseModel):
     availability_start: Optional[datetime] = None
     salary_expectation: Optional[int] = None
     notes: str = ""
+
+class Interview(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    application_id: str
+    candidate_id: str
+    job_id: str
+    interviewer_name: str
+    interviewer_email: str
+    scheduled_date: datetime
+    duration_minutes: int = 60
+    interview_type: InterviewTypeEnum = InterviewTypeEnum.video
+    meeting_link: Optional[str] = None
+    location: Optional[str] = None  # For in-person interviews
+    status: InterviewStatusEnum = InterviewStatusEnum.scheduled
+    notes: Optional[str] = None
+    feedback: Optional[str] = None
+    technical_score: Optional[float] = None  # 1-10 scale
+    cultural_fit_score: Optional[float] = None  # 1-10 scale
+    visa_suitability_score: Optional[float] = None  # 1-10 scale
+    overall_recommendation: Optional[str] = None  # hire, reject, second_interview
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class InterviewCreate(BaseModel):
+    application_id: str
+    interviewer_name: str
+    interviewer_email: str
+    scheduled_date: datetime
+    duration_minutes: int = 60
+    interview_type: InterviewTypeEnum = InterviewTypeEnum.video
+    meeting_link: Optional[str] = None
+    location: Optional[str] = None
+
+class InterviewUpdate(BaseModel):
+    scheduled_date: Optional[datetime] = None
+    status: Optional[InterviewStatusEnum] = None
+    notes: Optional[str] = None
+    feedback: Optional[str] = None
+    technical_score: Optional[float] = None
+    cultural_fit_score: Optional[float] = None
+    visa_suitability_score: Optional[float] = None
+    overall_recommendation: Optional[str] = None
 
 class Application(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
