@@ -66,6 +66,17 @@ class EnglishLevelEnum(str, Enum):
     good = "good"
     basic = "basic"
 
+class InterviewStatusEnum(str, Enum):
+    scheduled = "scheduled"
+    completed = "completed"
+    cancelled = "cancelled"
+    rescheduled = "rescheduled"
+
+class InterviewTypeEnum(str, Enum):
+    phone = "phone"
+    video = "video"
+    in_person = "in_person"
+
 # Models
 class Job(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
