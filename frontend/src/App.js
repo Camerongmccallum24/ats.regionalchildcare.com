@@ -128,39 +128,6 @@ function App() {
     }
   };
 
-  const fetchVisaEvaluation = async (candidateId) => {
-    try {
-      const response = await axios.get(`${API}/candidates/${candidateId}/visa-evaluation`);
-      setVisaEvaluations(prev => ({...prev, [candidateId]: response.data}));
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching visa evaluation:", error);
-      return null;
-    }
-  };
-
-  const uploadResume = async (candidateId, file) => {
-    setUploadingResume(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await axios.post(`${API}/candidates/${candidateId}/upload-resume`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      await fetchCandidates(); // Refresh candidates to show updated data
-      return response.data;
-    } catch (error) {
-      console.error("Error uploading resume:", error);
-      throw error;
-    } finally {
-      setUploadingResume(false);
-    }
-  };
-
   useEffect(() => {
     fetchJobs();
     fetchCandidates();
