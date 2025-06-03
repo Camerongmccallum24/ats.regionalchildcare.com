@@ -843,34 +843,374 @@ class GROEarlyLearningATSBackendTest(unittest.TestCase):
         }
 
 
-if __name__ == "__main__":
-    # Run the tests
-    print("🚀 Starting GRO Early Learning ATS Backend Tests")
-    print(f"🔗 Backend URL: {BACKEND_URL}")
-    print("=" * 80)
+    def test_20_email_template_management(self):
+        """Test email template management"""
+        print("\n🧪 Testing email template management...")
+        
+        # Test creating an email template
+        template_data = {
+            "name": f"{self.test_prefix}_Welcome Template",
+            "subject": "Welcome to GRO Early Learning",
+            "content": "<p>Dear {{candidate_name}},</p><p>Welcome to GRO Early Learning! We're excited to have you apply for the {{job_title}} position in {{location}}.</p><p>Best regards,<br>GRO Early Learning Team</p>",
+            "template_type": "welcome_email"
+        }
+        
+        response = requests.post(f"{BACKEND_URL}/email-templates", params=template_data)
+        self.assertEqual(response.status_code, 200, f"Failed to create email template: {response.text}")
+        
+        template = response.json()
+        self.assertEqual(template["name"], template_data["name"])
+        self.assertEqual(template["subject"], template_data["subject"])
+        self.assertEqual(template["content"], template_data["content"])
+        self.assertEqual(template["template_type"], template_data["template_type"])
+        self.assertTrue(template["is_active"])
+        
+        print(f"✅ Email template created successfully with ID: {template['id']}")
+        
+        # Test creating another template with different type
+        interview_template_data = {
+            "name": f"{self.test_prefix}_Interview Template",
+            "subject": "Interview Invitation - {{job_title}}",
+            "content": "<p>Dear {{candidate_name}},</p><p>We would like to invite you for an interview for the {{job_title}} position in {{location}}.</p><p>Interview details:</p><p>Date: {{interview_date}}<br>Time: {{interview_time}}<br>Location: {{interview_location}}</p><p>Best regards,<br>GRO Early Learning Team</p>",
+            "template_type": "interview_invitation"
+        }
+        
+        response = requests.post(f"{BACKEND_URL}/email-templates", params=interview_template_data)
+        self.assertEqual(response.status_code, 200)
+        
+        interview_template = response.json()
+        print(f"✅ Interview template created successfully with ID: {interview_template['id']}")
+        
+        # Test getting all templates
+        response = requests.get(f"{BACKEND_URL}/email-templates")
+        self.assertEqual(response.status_code, 200)
+        
+        templates = response.json()
+        self.assertIsInstance(templates, list)
+        self.assertGreaterEqual(len(templates), 2)  # At least our 2 templates
+        
+        print(f"✅ Retrieved {len(templates)} email templates successfully")
+        
+        # Test filtering by template type
+        response = requests.get(f"{BACKEND_URL}/email-templates?template_type=welcome_email")
+        self.assertEqual(response.status_code, 200)
+        
+        welcome_templates = response.json()
+        self.assertIsInstance(welcome_templates, list)
+        self.assertGreaterEqual(len(welcome_templates), 1)
+        
+        # Verify our welcome template is in the filtered list
+        template_ids = [t["id"] for t in welcome_templates]
+        self.assertIn(template["id"], template_ids)
+        
+        print(f"✅ Retrieved {len(welcome_templates)} welcome email templates successfully")
+        
+        return {
+            "welcome_template": template,
+            "interview_template": interview_template,
+            "all_templates": templates
+        }
     
-    # Create a test suite with ordered tests
-    test_suite = unittest.TestSuite()
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_01_create_job'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_02_get_jobs'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_03_get_job_by_id'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_04_update_job'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_05_create_candidate'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_06_get_candidates'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_07_get_candidate_by_id'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_08_update_candidate'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_09_create_application'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_10_get_applications'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_11_update_application'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_12_bulk_update_applications'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_13_dashboard_stats'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_14_upload_resume'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_15_visa_evaluation'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_16_create_interview'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_17_get_interviews'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_18_update_interview'))
-    test_suite.addTest(GROEarlyLearningATSBackendTest('test_19_enhanced_candidate_scoring'))
+    def test_21_advanced_search_and_filtering(self):
+        """Test advanced search and filtering"""
+        print("\n🧪 Testing advanced search and filtering...")
+        
+        # Create test candidates with different profiles if needed
+        if len(self.created_resources["candidates"]) < 3:
+            # Create candidates with different profiles
+            profiles = [
+                {
+                    "email": f"{self.test_prefix}_rural@example.com",
+                    "phone": "0412345680",
+                    "full_name": f"{self.test_prefix} Rural Candidate",
+                    "location": "Mount Isa",
+                    "visa_status": "citizen",
+                    "sponsorship_needed": False,
+                    "childcare_cert": "Certificate III in Early Childhood Education",
+                    "experience_years": 2,
+                    "rural_experience": True,
+                    "relocation_willing": "yes",
+                    "english_level": "native"
+                },
+                {
+                    "email": f"{self.test_prefix}_visa@example.com",
+                    "phone": "0412345681",
+                    "full_name": f"{self.test_prefix} Visa Candidate",
+                    "location": "Brisbane",
+                    "visa_status": "needs_sponsorship",
+                    "sponsorship_needed": True,
+                    "childcare_cert": "Diploma in Early Childhood Education",
+                    "experience_years": 4,
+                    "rural_experience": False,
+                    "relocation_willing": "maybe",
+                    "english_level": "fluent"
+                }
+            ]
+            
+            for profile in profiles:
+                response = requests.post(f"{BACKEND_URL}/candidates", json=profile)
+                self.assertEqual(response.status_code, 200)
+                candidate = response.json()
+                self.created_resources["candidates"].append(candidate["id"])
+                print(f"✅ Created test candidate: {candidate['full_name']}")
+        
+        # Test text search
+        search_query = self.test_prefix
+        response = requests.post(
+            f"{BACKEND_URL}/candidates/advanced-search",
+            params={"search_query": search_query}
+        )
+        self.assertEqual(response.status_code, 200)
+        
+        search_results = response.json()
+        self.assertIsInstance(search_results, list)
+        self.assertGreaterEqual(len(search_results), 1)
+        
+        print(f"✅ Text search for '{search_query}' returned {len(search_results)} results")
+        
+        # Test score range filtering
+        response = requests.post(
+            f"{BACKEND_URL}/candidates/advanced-search",
+            params={
+                "min_score": 5.0,
+                "max_score": 10.0
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        
+        high_score_results = response.json()
+        self.assertIsInstance(high_score_results, list)
+        
+        print(f"✅ Score range search (5.0-10.0) returned {len(high_score_results)} results")
+        
+        # Test visa status filtering
+        response = requests.post(
+            f"{BACKEND_URL}/candidates/advanced-search",
+            params={
+                "visa_status": ["needs_sponsorship"],
+                "sponsorship_needed": True
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        
+        visa_results = response.json()
+        self.assertIsInstance(visa_results, list)
+        
+        print(f"✅ Visa status search returned {len(visa_results)} results")
+        
+        # Test rural experience filtering
+        response = requests.post(
+            f"{BACKEND_URL}/candidates/advanced-search",
+            params={"rural_experience": True}
+        )
+        self.assertEqual(response.status_code, 200)
+        
+        rural_results = response.json()
+        self.assertIsInstance(rural_results, list)
+        
+        print(f"✅ Rural experience search returned {len(rural_results)} results")
+        
+        # Test location filtering
+        response = requests.post(
+            f"{BACKEND_URL}/candidates/advanced-search",
+            params={"locations": ["Mount Isa", "Moranbah"]}
+        )
+        self.assertEqual(response.status_code, 200)
+        
+        location_results = response.json()
+        self.assertIsInstance(location_results, list)
+        
+        print(f"✅ Location search returned {len(location_results)} results")
+        
+        # Test combined filtering
+        response = requests.post(
+            f"{BACKEND_URL}/candidates/advanced-search",
+            params={
+                "search_query": self.test_prefix,
+                "min_score": 3.0,
+                "rural_experience": True
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        
+        combined_results = response.json()
+        self.assertIsInstance(combined_results, list)
+        
+        print(f"✅ Combined search returned {len(combined_results)} results")
+        
+        return {
+            "text_search": search_results,
+            "score_range": high_score_results,
+            "visa_status": visa_results,
+            "rural_experience": rural_results,
+            "location": location_results,
+            "combined": combined_results
+        }
     
-    # Run the tests
-    runner = unittest.TextTestRunner(verbosity=2)
-    runner.run(test_suite)
+    def test_22_document_management(self):
+        """Test document management"""
+        print("\n🧪 Testing document management...")
+        
+        # Create a candidate if none exists
+        if not self.created_resources["candidates"]:
+            candidate = self.test_05_create_candidate()
+        
+        candidate_id = self.created_resources["candidates"][0]
+        
+        # Create a temporary PDF file with sample content
+        temp_pdf_path = f"/tmp/{self.test_prefix}_document.pdf"
+        with open(temp_pdf_path, "wb") as f:
+            f.write(self.sample_pdf_content)
+        
+        # Test document upload
+        with open(temp_pdf_path, "rb") as f:
+            files = {"file": (f"{self.test_prefix}_document.pdf", f, "application/pdf")}
+            response = requests.post(
+                f"{BACKEND_URL}/documents/upload",
+                files=files,
+                data={
+                    "document_type": "certificate",
+                    "related_entity_id": candidate_id,
+                    "related_entity_type": "candidate"
+                }
+            )
+        
+        # Clean up the temporary file
+        os.remove(temp_pdf_path)
+        
+        self.assertEqual(response.status_code, 200, f"Failed to upload document: {response.text}")
+        
+        document = response.json()
+        self.assertIn("document_id", document)
+        self.assertIn("filename", document)
+        self.assertIn("size", document)
+        
+        document_id = document["document_id"]
+        print(f"✅ Document uploaded successfully with ID: {document_id}")
+        
+        # Test getting all documents
+        response = requests.get(f"{BACKEND_URL}/documents")
+        self.assertEqual(response.status_code, 200)
+        
+        documents = response.json()
+        self.assertIsInstance(documents, list)
+        self.assertGreaterEqual(len(documents), 1)
+        
+        print(f"✅ Retrieved {len(documents)} documents successfully")
+        
+        # Test filtering by related entity
+        response = requests.get(f"{BACKEND_URL}/documents?related_entity_id={candidate_id}")
+        self.assertEqual(response.status_code, 200)
+        
+        candidate_documents = response.json()
+        self.assertIsInstance(candidate_documents, list)
+        self.assertGreaterEqual(len(candidate_documents), 1)
+        
+        print(f"✅ Retrieved {len(candidate_documents)} documents for candidate {candidate_id}")
+        
+        # Test filtering by document type
+        response = requests.get(f"{BACKEND_URL}/documents?document_type=certificate")
+        self.assertEqual(response.status_code, 200)
+        
+        certificate_documents = response.json()
+        self.assertIsInstance(certificate_documents, list)
+        self.assertGreaterEqual(len(certificate_documents), 1)
+        
+        print(f"✅ Retrieved {len(certificate_documents)} certificate documents")
+        
+        return {
+            "uploaded_document": document,
+            "all_documents": documents,
+            "candidate_documents": candidate_documents,
+            "certificate_documents": certificate_documents
+        }
+    
+    def test_23_compliance_reporting(self):
+        """Test compliance reporting"""
+        print("\n🧪 Testing compliance reporting...")
+        
+        # Test EEO compliance report
+        start_date = (datetime.utcnow() - timedelta(days=90)).isoformat()
+        end_date = datetime.utcnow().isoformat()
+        
+        response = requests.get(
+            f"{BACKEND_URL}/compliance/eeo-report",
+            params={
+                "start_date": start_date,
+                "end_date": end_date
+            }
+        )
+        self.assertEqual(response.status_code, 200, f"Failed to get EEO report: {response.text}")
+        
+        eeo_report = response.json()
+        self.assertEqual(eeo_report["report_type"], "eeo")
+        self.assertIn("period", eeo_report)
+        self.assertIn("summary", eeo_report)
+        self.assertIn("total_candidates", eeo_report["summary"])
+        self.assertIn("breakdown_by_visa_status", eeo_report["summary"])
+        
+        print(f"✅ EEO compliance report generated successfully")
+        print(f"   - Total candidates: {eeo_report['summary']['total_candidates']}")
+        print(f"   - Visa status breakdown: {len(eeo_report['summary']['breakdown_by_visa_status'])} categories")
+        
+        # Test visa sponsorship report
+        response = requests.get(f"{BACKEND_URL}/compliance/visa-sponsorship-report")
+        self.assertEqual(response.status_code, 200, f"Failed to get visa sponsorship report: {response.text}")
+        
+        visa_report = response.json()
+        self.assertEqual(visa_report["report_type"], "visa_sponsorship")
+        self.assertIn("summary", visa_report)
+        self.assertIn("total_sponsorship_candidates", visa_report["summary"])
+        self.assertIn("pipeline_by_visa_type", visa_report["summary"])
+        self.assertIn("location_breakdown", visa_report["summary"])
+        
+        print(f"✅ Visa sponsorship report generated successfully")
+        print(f"   - Total sponsorship candidates: {visa_report['summary']['total_sponsorship_candidates']}")
+        print(f"   - Visa types: {len(visa_report['summary']['pipeline_by_visa_type'])} types")
+        print(f"   - Locations: {len(visa_report['summary']['location_breakdown'])} locations")
+        
+        return {
+            "eeo_report": eeo_report,
+            "visa_report": visa_report
+        }
+    
+    def test_24_enhanced_dashboard_analytics(self):
+        """Test enhanced dashboard analytics"""
+        print("\n🧪 Testing enhanced dashboard analytics...")
+        
+        response = requests.get(f"{BACKEND_URL}/dashboard/advanced-analytics")
+        self.assertEqual(response.status_code, 200, f"Failed to get advanced analytics: {response.text}")
+        
+        analytics = response.json()
+        
+        # Verify analytics structure
+        self.assertIn("source_effectiveness", analytics)
+        self.assertIn("score_distribution", analytics)
+        self.assertIn("recent_activity", analytics)
+        
+        # Verify source effectiveness
+        self.assertIsInstance(analytics["source_effectiveness"], list)
+        if analytics["source_effectiveness"]:
+            source = analytics["source_effectiveness"][0]
+            self.assertIn("source", source)
+            self.assertIn("candidates", source)
+            self.assertIn("avg_score", source)
+            self.assertIn("conversion_rate", source)
+        
+        # Verify score distribution
+        self.assertIn("excellent", analytics["score_distribution"])
+        self.assertIn("good", analytics["score_distribution"])
+        self.assertIn("fair", analytics["score_distribution"])
+        self.assertIn("poor", analytics["score_distribution"])
+        
+        # Verify recent activity
+        self.assertIn("new_candidates_this_week", analytics["recent_activity"])
+        self.assertIn("new_applications_this_week", analytics["recent_activity"])
+        self.assertIn("interviews_scheduled_this_week", analytics["recent_activity"])
+        
+        print(f"✅ Enhanced dashboard analytics retrieved successfully")
+        print(f"   - Source effectiveness: {len(analytics['source_effectiveness'])} sources")
+        print(f"   - Score distribution: {analytics['score_distribution']}")
+        print(f"   - Recent activity: {analytics['recent_activity']}")
+        
+        return analytics
