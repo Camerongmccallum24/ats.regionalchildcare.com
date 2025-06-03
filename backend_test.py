@@ -526,6 +526,323 @@ class GROEarlyLearningATSBackendTest(unittest.TestCase):
         
         return stats
 
+    def test_14_upload_resume(self):
+        """Test resume upload and parsing"""
+        print("\n🧪 Testing resume upload and parsing...")
+        
+        # Create a candidate first if none exists
+        if not self.created_resources["candidates"]:
+            candidate = self.test_05_create_candidate()
+        
+        candidate_id = self.created_resources["candidates"][0]
+        
+        # Create a temporary PDF file with sample content
+        temp_pdf_path = f"/tmp/{self.test_prefix}_resume.pdf"
+        with open(temp_pdf_path, "wb") as f:
+            f.write(self.sample_pdf_content)
+        
+        # Upload the resume
+        with open(temp_pdf_path, "rb") as f:
+            files = {"file": (f"{self.test_prefix}_resume.pdf", f, "application/pdf")}
+            response = requests.post(
+                f"{BACKEND_URL}/candidates/{candidate_id}/upload-resume",
+                files=files
+            )
+        
+        # Clean up the temporary file
+        os.remove(temp_pdf_path)
+        
+        # Verify the response
+        self.assertEqual(response.status_code, 200, f"Failed to upload resume: {response.text}")
+        
+        result = response.json()
+        self.assertIn("message", result)
+        self.assertIn("parsed_skills", result)
+        self.assertIn("new_score", result)
+        
+        print(f"✅ Resume uploaded successfully")
+        print(f"   - Parsed skills: {result.get('parsed_skills', [])}")
+        print(f"   - Education: {result.get('education')}")
+        print(f"   - New score: {result.get('new_score')}")
+        
+        # Verify candidate was updated with resume data
+        response = requests.get(f"{BACKEND_URL}/candidates/{candidate_id}")
+        self.assertEqual(response.status_code, 200)
+        
+        updated_candidate = response.json()
+        self.assertIsNotNone(updated_candidate.get("resume_url"))
+        
+        return result
+    
+    def test_15_visa_evaluation(self):
+        """Test visa sponsorship evaluation"""
+        print("\n🧪 Testing visa sponsorship evaluation...")
+        
+        # Create a candidate first if none exists
+        if not self.created_resources["candidates"]:
+            candidate = self.test_05_create_candidate()
+        
+        candidate_id = self.created_resources["candidates"][0]
+        
+        # Get visa evaluation
+        response = requests.get(f"{BACKEND_URL}/candidates/{candidate_id}/visa-evaluation")
+        self.assertEqual(response.status_code, 200, f"Failed to get visa evaluation: {response.text}")
+        
+        evaluation = response.json()
+        
+        # Verify evaluation structure
+        self.assertIn("eligible", evaluation)
+        self.assertIn("reason", evaluation)
+        self.assertIn("visa_pathway", evaluation)
+        self.assertIn("requirements", evaluation)
+        self.assertIn("score", evaluation)
+        
+        # Verify score is a number
+        self.assertIsInstance(evaluation["score"], (int, float))
+        
+        print(f"✅ Visa evaluation retrieved successfully:")
+        print(f"   - Eligible: {evaluation['eligible']}")
+        print(f"   - Reason: {evaluation['reason']}")
+        print(f"   - Visa pathway: {evaluation['visa_pathway']}")
+        print(f"   - Requirements: {evaluation['requirements']}")
+        print(f"   - Score: {evaluation['score']}")
+        
+        return evaluation
+    
+    def test_16_create_interview(self):
+        """Test creating an interview"""
+        print("\n🧪 Testing interview creation...")
+        
+        # Create an application first if none exists
+        if not self.created_resources["applications"]:
+            application = self.test_09_create_application()
+        
+        application_id = self.created_resources["applications"][0]
+        
+        # Create interview data
+        interview_data = dict(self.interview_data)
+        interview_data["application_id"] = application_id
+        
+        # Create the interview
+        response = requests.post(f"{BACKEND_URL}/interviews", json=interview_data)
+        self.assertEqual(response.status_code, 200, f"Failed to create interview: {response.text}")
+        
+        interview = response.json()
+        self.created_resources["interviews"].append(interview["id"])
+        
+        # Verify interview data
+        self.assertEqual(interview["application_id"], application_id)
+        self.assertEqual(interview["interviewer_name"], interview_data["interviewer_name"])
+        self.assertEqual(interview["interviewer_email"], interview_data["interviewer_email"])
+        self.assertEqual(interview["status"], "scheduled")
+        
+        # Verify meeting link was generated for video interview
+        if interview_data["interview_type"] == "video":
+            self.assertIsNotNone(interview["meeting_link"])
+            self.assertTrue(interview["meeting_link"].startswith("https://"))
+        
+        print(f"✅ Interview created successfully with ID: {interview['id']}")
+        print(f"   - Status: {interview['status']}")
+        print(f"   - Type: {interview['interview_type']}")
+        print(f"   - Meeting link: {interview.get('meeting_link')}")
+        
+        return interview
+    
+    def test_17_get_interviews(self):
+        """Test retrieving interviews"""
+        print("\n🧪 Testing interview retrieval...")
+        
+        # Create an interview first if none exists
+        if not self.created_resources["interviews"]:
+            interview = self.test_16_create_interview()
+        
+        # Get all interviews
+        response = requests.get(f"{BACKEND_URL}/interviews")
+        self.assertEqual(response.status_code, 200, f"Failed to get interviews: {response.text}")
+        
+        interviews = response.json()
+        self.assertIsInstance(interviews, list)
+        
+        # Check if our test interview is in the list
+        interview_ids = [interview["id"] for interview in interviews]
+        self.assertTrue(any(interview_id in interview_ids for interview_id in self.created_resources["interviews"]), 
+                       "Created interview not found in interviews list")
+        
+        print(f"✅ Retrieved {len(interviews)} interviews successfully")
+        
+        # Test filtering by status
+        response = requests.get(f"{BACKEND_URL}/interviews?status=scheduled")
+        self.assertEqual(response.status_code, 200)
+        scheduled_interviews = response.json()
+        self.assertIsInstance(scheduled_interviews, list)
+        print(f"✅ Retrieved {len(scheduled_interviews)} scheduled interviews successfully")
+        
+        # Test filtering by candidate
+        if self.created_resources["candidates"]:
+            candidate_id = self.created_resources["candidates"][0]
+            response = requests.get(f"{BACKEND_URL}/interviews?candidate_id={candidate_id}")
+            self.assertEqual(response.status_code, 200)
+            candidate_interviews = response.json()
+            self.assertIsInstance(candidate_interviews, list)
+            print(f"✅ Retrieved {len(candidate_interviews)} interviews for candidate {candidate_id} successfully")
+        
+        return interviews
+    
+    def test_18_update_interview(self):
+        """Test updating an interview"""
+        print("\n🧪 Testing interview update...")
+        
+        # Create an interview first if none exists
+        if not self.created_resources["interviews"]:
+            interview = self.test_16_create_interview()
+        
+        interview_id = self.created_resources["interviews"][0]
+        
+        # Update to completed status with feedback
+        update_data = {
+            "status": "completed",
+            "feedback": "Candidate performed well in the interview. Strong communication skills and relevant experience.",
+            "technical_score": 8.5,
+            "cultural_fit_score": 9.0,
+            "visa_suitability_score": 7.5,
+            "overall_recommendation": "hire"
+        }
+        
+        # Update the interview
+        response = requests.put(f"{BACKEND_URL}/interviews/{interview_id}", json=update_data)
+        self.assertEqual(response.status_code, 200, f"Failed to update interview: {response.text}")
+        
+        updated_interview = response.json()
+        self.assertEqual(updated_interview["id"], interview_id)
+        self.assertEqual(updated_interview["status"], update_data["status"])
+        self.assertEqual(updated_interview["feedback"], update_data["feedback"])
+        self.assertEqual(updated_interview["technical_score"], update_data["technical_score"])
+        self.assertEqual(updated_interview["cultural_fit_score"], update_data["cultural_fit_score"])
+        self.assertEqual(updated_interview["visa_suitability_score"], update_data["visa_suitability_score"])
+        self.assertEqual(updated_interview["overall_recommendation"], update_data["overall_recommendation"])
+        
+        print(f"✅ Interview updated successfully to status: {updated_interview['status']}")
+        print(f"   - Technical score: {updated_interview['technical_score']}")
+        print(f"   - Cultural fit score: {updated_interview['cultural_fit_score']}")
+        print(f"   - Visa suitability score: {updated_interview['visa_suitability_score']}")
+        print(f"   - Overall recommendation: {updated_interview['overall_recommendation']}")
+        
+        # Update to rescheduled status
+        update_data = {
+            "status": "rescheduled",
+            "scheduled_date": (datetime.utcnow() + timedelta(days=14)).isoformat(),
+            "notes": "Rescheduled at candidate's request."
+        }
+        
+        response = requests.put(f"{BACKEND_URL}/interviews/{interview_id}", json=update_data)
+        self.assertEqual(response.status_code, 200)
+        
+        updated_interview = response.json()
+        self.assertEqual(updated_interview["status"], update_data["status"])
+        self.assertEqual(updated_interview["notes"], update_data["notes"])
+        
+        print(f"✅ Interview rescheduled successfully")
+        
+        return updated_interview
+    
+    def test_19_enhanced_candidate_scoring(self):
+        """Test enhanced candidate scoring algorithm"""
+        print("\n🧪 Testing enhanced candidate scoring algorithm...")
+        
+        # Create candidates with different profiles to test scoring
+        # Candidate 1: High experience, permanent resident, rural experience, native English
+        candidate1_data = {
+            "email": f"{self.test_prefix}_high_score@example.com",
+            "phone": "0412345678",
+            "full_name": f"{self.test_prefix} High Score Candidate",
+            "location": "Brisbane",
+            "visa_status": "permanent",
+            "visa_type": "PR",
+            "sponsorship_needed": False,
+            "childcare_cert": "Bachelor in Early Childhood Education",
+            "experience_years": 5,
+            "rural_experience": True,
+            "relocation_willing": "yes",
+            "housing_needed": False,
+            "english_level": "native",
+            "availability_start": (datetime.utcnow() + timedelta(days=7)).isoformat(),
+            "salary_expectation": 80000,
+            "notes": "High score test candidate"
+        }
+        
+        # Candidate 2: Low experience, needs sponsorship, no rural experience, basic English
+        candidate2_data = {
+            "email": f"{self.test_prefix}_low_score@example.com",
+            "phone": "0412345679",
+            "full_name": f"{self.test_prefix} Low Score Candidate",
+            "location": "Sydney",
+            "visa_status": "needs_sponsorship",
+            "visa_type": "None",
+            "sponsorship_needed": True,
+            "childcare_cert": None,
+            "experience_years": 0,
+            "rural_experience": False,
+            "relocation_willing": "no",
+            "housing_needed": True,
+            "english_level": "basic",
+            "availability_start": (datetime.utcnow() + timedelta(days=30)).isoformat(),
+            "salary_expectation": 60000,
+            "notes": "Low score test candidate"
+        }
+        
+        # Create the candidates
+        response1 = requests.post(f"{BACKEND_URL}/candidates", json=candidate1_data)
+        self.assertEqual(response1.status_code, 200)
+        candidate1 = response1.json()
+        self.created_resources["candidates"].append(candidate1["id"])
+        
+        response2 = requests.post(f"{BACKEND_URL}/candidates", json=candidate2_data)
+        self.assertEqual(response2.status_code, 200)
+        candidate2 = response2.json()
+        self.created_resources["candidates"].append(candidate2["id"])
+        
+        # Verify scoring
+        print(f"✅ High score candidate created with score: {candidate1['score']}")
+        print(f"✅ Low score candidate created with score: {candidate2['score']}")
+        
+        # Verify high score candidate has higher score than low score candidate
+        self.assertGreater(candidate1["score"], candidate2["score"])
+        
+        # Verify high score candidate has high score (expected around 9-10)
+        self.assertGreaterEqual(candidate1["score"], 9.0)
+        
+        # Verify low score candidate has low score (expected around 1-2)
+        self.assertLessEqual(candidate2["score"], 2.0)
+        
+        # Test score update when adding skills
+        # Upload resume for high score candidate to add skills
+        if hasattr(self, 'sample_pdf_content'):
+            temp_pdf_path = f"/tmp/{self.test_prefix}_resume.pdf"
+            with open(temp_pdf_path, "wb") as f:
+                f.write(self.sample_pdf_content)
+            
+            with open(temp_pdf_path, "rb") as f:
+                files = {"file": (f"{self.test_prefix}_resume.pdf", f, "application/pdf")}
+                response = requests.post(
+                    f"{BACKEND_URL}/candidates/{candidate1['id']}/upload-resume",
+                    files=files
+                )
+            
+            os.remove(temp_pdf_path)
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"✅ Resume uploaded for high score candidate, new score: {result.get('new_score')}")
+                
+                # Verify score increased or stayed at max
+                self.assertGreaterEqual(result.get('new_score'), candidate1['score'])
+        
+        return {
+            "high_score_candidate": candidate1,
+            "low_score_candidate": candidate2
+        }
+
+
 if __name__ == "__main__":
     # Run the tests
     print("🚀 Starting GRO Early Learning ATS Backend Tests")
@@ -547,6 +864,12 @@ if __name__ == "__main__":
     test_suite.addTest(GROEarlyLearningATSBackendTest('test_11_update_application'))
     test_suite.addTest(GROEarlyLearningATSBackendTest('test_12_bulk_update_applications'))
     test_suite.addTest(GROEarlyLearningATSBackendTest('test_13_dashboard_stats'))
+    test_suite.addTest(GROEarlyLearningATSBackendTest('test_14_upload_resume'))
+    test_suite.addTest(GROEarlyLearningATSBackendTest('test_15_visa_evaluation'))
+    test_suite.addTest(GROEarlyLearningATSBackendTest('test_16_create_interview'))
+    test_suite.addTest(GROEarlyLearningATSBackendTest('test_17_get_interviews'))
+    test_suite.addTest(GROEarlyLearningATSBackendTest('test_18_update_interview'))
+    test_suite.addTest(GROEarlyLearningATSBackendTest('test_19_enhanced_candidate_scoring'))
     
     # Run the tests
     runner = unittest.TextTestRunner(verbosity=2)
