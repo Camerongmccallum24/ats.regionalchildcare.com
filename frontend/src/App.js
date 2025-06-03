@@ -269,7 +269,7 @@ function App() {
         }
         
         await fetchJobs();
-        await fetchDashboardStats();
+        await fetchInterviews();
         setShowJobForm(false);
         setEditingJob(null);
         setJobForm({
