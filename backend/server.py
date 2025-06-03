@@ -515,7 +515,7 @@ async def update_job(job_id: str, job_data: JobCreate):
 async def create_candidate(candidate_data: CandidateCreate):
     candidate_dict = candidate_data.dict()
     candidate = Candidate(**candidate_dict)
-    candidate.score = calculate_candidate_score(candidate)
+    candidate.score = enhanced_calculate_candidate_score(candidate)
     
     result = await db.candidates.insert_one(candidate.dict())
     
