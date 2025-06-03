@@ -363,14 +363,6 @@ class ApplicationCreate(BaseModel):
     candidate_id: str
     cover_letter: Optional[str] = None
 
-class EmailTemplate(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    subject: str
-    content: str
-    type: str  # application_received, interview_invitation, etc.
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
 class ApplicationUpdate(BaseModel):
     status: ApplicationStatusEnum
     notes: Optional[str] = None
