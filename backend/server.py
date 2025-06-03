@@ -625,6 +625,191 @@ def evaluate_visa_sponsorship_eligibility(candidate: Candidate) -> dict:
         
     return result
 
+# Advanced helper functions
+async def log_audit_action(
+    user_id: str, 
+    user_email: str, 
+    action: AuditActionEnum, 
+    entity_type: str, 
+    entity_id: str, 
+    details: Dict[str, Any] = {},
+    ip_address: Optional[str] = None
+):
+    """Log audit trail for compliance"""
+    audit_log = AuditLog(
+        user_id=user_id,
+        user_email=user_email,
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        details=details,
+        ip_address=ip_address
+    )
+    await db.audit_logs.insert_one(audit_log.dict())
+
+def render_email_template(template_content: str, merge_data: Dict[str, Any]) -> str:
+    """Render email template with merge fields"""
+    try:
+        template = Template(template_content)
+        return template.render(**merge_data)
+    except Exception as e:
+        logging.error(f"Template rendering error: {e}")
+        return template_content
+
+async def send_templated_email(template_id: str, recipient_email: str, merge_data: Dict[str, Any]):
+    """Send email using template with merge fields"""
+    try:
+        # Get template
+        template_doc = await db.email_templates.find_one({"id": template_id, "is_active": True})
+        if not template_doc:
+            raise Exception("Template not found or inactive")
+        
+        template = EmailTemplate(**template_doc)
+        
+        # Render template with merge data
+        rendered_subject = render_email_template(template.subject, merge_data)
+        rendered_content = render_email_template(template.content, merge_data)
+        
+        # Send email
+        return await send_email(recipient_email, rendered_subject, rendered_content)
+    except Exception as e:
+        logging.error(f"Templated email sending failed: {e}")
+        return False
+
+def build_advanced_search_query(filters: AdvancedSearchFilter) -> Dict[str, Any]:
+    """Build MongoDB query from advanced search filters"""
+    query = {}
+    
+    # Location filters
+    if filters.locations:
+        query["location"] = {"$in": filters.locations}
+    
+    # Visa and sponsorship filters
+    if filters.visa_status:
+        query["visa_status"] = {"$in": filters.visa_status}
+    if filters.sponsorship_needed is not None:
+        query["sponsorship_needed"] = filters.sponsorship_needed
+    
+    # Experience filters
+    if filters.min_experience_years is not None or filters.max_experience_years is not None:
+        exp_query = {}
+        if filters.min_experience_years is not None:
+            exp_query["$gte"] = filters.min_experience_years
+        if filters.max_experience_years is not None:
+            exp_query["$lte"] = filters.max_experience_years
+        query["experience_years"] = exp_query
+    
+    if filters.rural_experience is not None:
+        query["rural_experience"] = filters.rural_experience
+    
+    # Score filters
+    if filters.min_score is not None or filters.max_score is not None:
+        score_query = {}
+        if filters.min_score is not None:
+            score_query["$gte"] = filters.min_score
+        if filters.max_score is not None:
+            score_query["$lte"] = filters.max_score
+        query["score"] = score_query
+    
+    # Availability filters
+    if filters.available_from is not None:
+        query["availability_start"] = {"$gte": filters.available_from}
+    
+    # Relocation filters
+    if filters.relocation_willing:
+        query["relocation_willing"] = {"$in": filters.relocation_willing}
+    
+    # Skills filters
+    if filters.required_skills:
+        query["skills"] = {"$in": filters.required_skills}
+    
+    # Status filters
+    if filters.application_status:
+        query["status"] = {"$in": filters.application_status}
+    
+    # Date filters
+    if filters.applied_after is not None or filters.applied_before is not None:
+        date_query = {}
+        if filters.applied_after is not None:
+            date_query["$gte"] = filters.applied_after
+        if filters.applied_before is not None:
+            date_query["$lte"] = filters.applied_before
+        query["created_at"] = date_query
+    
+    # Text search
+    if filters.search_query:
+        query["$or"] = [
+            {"full_name": {"$regex": filters.search_query, "$options": "i"}},
+            {"email": {"$regex": filters.search_query, "$options": "i"}},
+            {"notes": {"$regex": filters.search_query, "$options": "i"}},
+            {"resume_text": {"$regex": filters.search_query, "$options": "i"}},
+            {"childcare_cert": {"$regex": filters.search_query, "$options": "i"}}
+        ]
+    
+    return query
+
+async def generate_compliance_report(
+    report_type: str, 
+    start_date: datetime, 
+    end_date: datetime, 
+    user_id: str
+) -> Dict[str, Any]:
+    """Generate compliance reports for EEO, visa sponsorship, etc."""
+    if report_type == "eeo":
+        # EEO compliance report
+        pipeline = [
+            {"$match": {"created_at": {"$gte": start_date, "$lte": end_date}}},
+            {"$group": {
+                "_id": "$visa_status",
+                "count": {"$sum": 1},
+                "hired": {"$sum": {"$cond": [{"$eq": ["$status", "hired"]}, 1, 0]}},
+                "avg_score": {"$avg": "$score"}
+            }}
+        ]
+        
+        eeo_data = await db.candidates.aggregate(pipeline).to_list(1000)
+        
+        return {
+            "total_candidates": await db.candidates.count_documents({
+                "created_at": {"$gte": start_date, "$lte": end_date}
+            }),
+            "visa_status_breakdown": eeo_data,
+            "hiring_rate_by_status": {
+                item["_id"]: (item["hired"] / item["count"] * 100) if item["count"] > 0 else 0
+                for item in eeo_data
+            }
+        }
+    
+    elif report_type == "visa_sponsorship":
+        # Visa sponsorship pipeline report
+        sponsorship_candidates = await db.candidates.find({
+            "sponsorship_needed": True,
+            "created_at": {"$gte": start_date, "$lte": end_date}
+        }).to_list(1000)
+        
+        return {
+            "total_sponsorship_candidates": len(sponsorship_candidates),
+            "by_visa_type": {},
+            "by_location": {},
+            "success_rate": 0  # Calculate based on hired status
+        }
+    
+    elif report_type == "hiring_audit":
+        # Hiring audit trail
+        audit_data = await db.audit_logs.find({
+            "timestamp": {"$gte": start_date, "$lte": end_date},
+            "action": {"$in": ["create", "update", "send_email"]}
+        }).to_list(1000)
+        
+        return {
+            "total_actions": len(audit_data),
+            "actions_by_type": {},
+            "actions_by_user": {},
+            "timeline": audit_data[-50:]  # Last 50 actions
+        }
+    
+    return {}
+
 # API Routes
 
 # Jobs
