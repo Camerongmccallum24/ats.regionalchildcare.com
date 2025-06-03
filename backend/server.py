@@ -358,6 +358,37 @@ class AdvancedSearchFilter(BaseModel):
     # Text search
     search_query: Optional[str] = None  # Search in name, email, notes, resume text
 
+# Webhook Models
+class JobWebhookPayload(BaseModel):
+    """Job data formatted for careers site webhook"""
+    job_id: str
+    title: str
+    location: str
+    description: str
+    requirements: List[str]
+    salary_range: Optional[str] = None
+    employment_type: str = "Full-time"
+    sponsorship_eligible: bool = False
+    relocation_support: bool = False
+    housing_support: bool = False
+    company_name: str = "GRO Early Learning"
+    company_description: str = "Leading childcare provider in rural Queensland"
+    contact_email: str = "careers@groearlylearning.com"
+    application_url: str = ""
+    posted_date: datetime
+    expires_date: Optional[datetime] = None
+    status: str = "active"
+    
+class WebhookLog(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    webhook_url: str
+    payload: Dict[str, Any]
+    response_status: Optional[int] = None
+    response_body: Optional[str] = None
+    error_message: Optional[str] = None
+    sent_at: datetime = Field(default_factory=datetime.utcnow)
+    job_id: str
+
 class Application(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     job_id: str
