@@ -1022,6 +1022,299 @@ async def get_dashboard_stats():
         "jobs_by_location": {item["_id"]: item["count"] for item in location_counts}
     }
 
+# Advanced Phase 3 Features
+
+# Email Template Management
+@api_router.post("/email-templates")
+async def create_email_template(
+    name: str,
+    subject: str,
+    content: str,
+    template_type: str
+):
+    template = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "subject": subject,
+        "content": content,
+        "template_type": template_type,
+        "is_active": True,
+        "created_by": "system",
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+    
+    await db.email_templates.insert_one(template)
+    return template
+
+@api_router.get("/email-templates")
+async def get_email_templates(template_type: Optional[str] = Query(None)):
+    query = {"is_active": True}
+    if template_type:
+        query["template_type"] = template_type
+    
+    templates = await db.email_templates.find(query).sort("name", 1).to_list(1000)
+    return templates
+
+# Advanced Search
+@api_router.post("/candidates/advanced-search")
+async def advanced_candidate_search(
+    search_query: Optional[str] = None,
+    min_score: Optional[float] = None,
+    max_score: Optional[float] = None,
+    visa_status: Optional[List[str]] = None,
+    sponsorship_needed: Optional[bool] = None,
+    rural_experience: Optional[bool] = None,
+    min_experience: Optional[int] = None,
+    locations: Optional[List[str]] = None
+):
+    query = {}
+    
+    # Text search
+    if search_query:
+        query["$or"] = [
+            {"full_name": {"$regex": search_query, "$options": "i"}},
+            {"email": {"$regex": search_query, "$options": "i"}},
+            {"notes": {"$regex": search_query, "$options": "i"}},
+            {"resume_text": {"$regex": search_query, "$options": "i"}},
+            {"childcare_cert": {"$regex": search_query, "$options": "i"}}
+        ]
+    
+    # Score filters
+    if min_score is not None or max_score is not None:
+        score_query = {}
+        if min_score is not None:
+            score_query["$gte"] = min_score
+        if max_score is not None:
+            score_query["$lte"] = max_score
+        query["score"] = score_query
+    
+    # Visa filters
+    if visa_status:
+        query["visa_status"] = {"$in": visa_status}
+    if sponsorship_needed is not None:
+        query["sponsorship_needed"] = sponsorship_needed
+    
+    # Experience filters
+    if rural_experience is not None:
+        query["rural_experience"] = rural_experience
+    if min_experience is not None:
+        query["experience_years"] = {"$gte": min_experience}
+    
+    # Location filters
+    if locations:
+        query["location"] = {"$in": locations}
+    
+    candidates = await db.candidates.find(query).sort("score", -1).to_list(1000)
+    return candidates
+
+# Document Management
+@api_router.post("/documents/upload")
+async def upload_document(
+    file: UploadFile = File(...),
+    document_type: str = "other",
+    related_entity_id: str = "",
+    related_entity_type: str = ""
+):
+    try:
+        # Read file content
+        file_content = await file.read()
+        file_base64 = base64.b64encode(file_content).decode('utf-8')
+        file_url = f"data:{file.content_type};base64,{file_base64}"
+        
+        # Create document record
+        document = {
+            "id": str(uuid.uuid4()),
+            "filename": file.filename,
+            "document_type": document_type,
+            "file_url": file_url,
+            "file_size": len(file_content),
+            "mime_type": file.content_type,
+            "uploaded_by": "system",
+            "related_entity_id": related_entity_id,
+            "related_entity_type": related_entity_type,
+            "created_at": datetime.utcnow()
+        }
+        
+        await db.documents.insert_one(document)
+        
+        return {
+            "message": "Document uploaded successfully",
+            "document_id": document["id"],
+            "filename": document["filename"],
+            "size": document["file_size"]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Document upload failed: {str(e)}")
+
+@api_router.get("/documents")
+async def get_documents(
+    related_entity_id: Optional[str] = Query(None),
+    document_type: Optional[str] = Query(None)
+):
+    query = {}
+    if related_entity_id:
+        query["related_entity_id"] = related_entity_id
+    if document_type:
+        query["document_type"] = document_type
+    
+    documents = await db.documents.find(query).sort("created_at", -1).to_list(1000)
+    return documents
+
+# Compliance Reporting
+@api_router.get("/compliance/eeo-report")
+async def generate_eeo_report(
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None)
+):
+    """Generate EEO compliance report"""
+    try:
+        # Default to last 6 months if no dates provided
+        if not end_date:
+            end_date = datetime.utcnow()
+        if not start_date:
+            start_date = end_date - timedelta(days=180)
+        
+        # EEO data aggregation
+        pipeline = [
+            {"$match": {"created_at": {"$gte": start_date, "$lte": end_date}}},
+            {"$group": {
+                "_id": "$visa_status",
+                "total_candidates": {"$sum": 1},
+                "hired_count": {"$sum": {"$cond": [{"$eq": ["$status", "hired"]}, 1, 0]}},
+                "avg_score": {"$avg": "$score"},
+                "with_rural_experience": {"$sum": {"$cond": ["$rural_experience", 1, 0]}}
+            }}
+        ]
+        
+        eeo_data = await db.candidates.aggregate(pipeline).to_list(1000)
+        
+        # Calculate hiring rates
+        for item in eeo_data:
+            item["hiring_rate"] = (item["hired_count"] / item["total_candidates"] * 100) if item["total_candidates"] > 0 else 0
+            item["avg_score"] = round(item["avg_score"], 2) if item["avg_score"] else 0
+        
+        total_candidates = await db.candidates.count_documents({
+            "created_at": {"$gte": start_date, "$lte": end_date}
+        })
+        
+        return {
+            "report_type": "eeo",
+            "period": {
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat()
+            },
+            "summary": {
+                "total_candidates": total_candidates,
+                "breakdown_by_visa_status": eeo_data
+            },
+            "generated_at": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"EEO report generation failed: {str(e)}")
+
+@api_router.get("/compliance/visa-sponsorship-report")
+async def generate_visa_sponsorship_report():
+    """Generate visa sponsorship pipeline report"""
+    try:
+        # Visa sponsorship candidates
+        sponsorship_candidates = await db.candidates.find({
+            "sponsorship_needed": True
+        }).to_list(1000)
+        
+        # Group by visa type and status
+        visa_pipeline = {}
+        location_breakdown = {}
+        
+        for candidate in sponsorship_candidates:
+            visa_type = candidate.get("visa_type", "Unknown")
+            status = candidate.get("status", "new")
+            location = candidate.get("location", "Unknown")
+            
+            if visa_type not in visa_pipeline:
+                visa_pipeline[visa_type] = {}
+            if status not in visa_pipeline[visa_type]:
+                visa_pipeline[visa_type][status] = 0
+            visa_pipeline[visa_type][status] += 1
+            
+            if location not in location_breakdown:
+                location_breakdown[location] = 0
+            location_breakdown[location] += 1
+        
+        return {
+            "report_type": "visa_sponsorship",
+            "summary": {
+                "total_sponsorship_candidates": len(sponsorship_candidates),
+                "pipeline_by_visa_type": visa_pipeline,
+                "location_breakdown": location_breakdown
+            },
+            "generated_at": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Visa sponsorship report generation failed: {str(e)}")
+
+# Enhanced Dashboard
+@api_router.get("/dashboard/advanced-analytics")
+async def get_advanced_analytics():
+    """Get advanced analytics for enhanced dashboard"""
+    try:
+        # Source effectiveness
+        source_pipeline = [
+            {"$group": {
+                "_id": "$source",
+                "candidates": {"$sum": 1},
+                "avg_score": {"$avg": "$score"},
+                "hired": {"$sum": {"$cond": [{"$eq": ["$status", "hired"]}, 1, 0]}}
+            }}
+        ]
+        source_effectiveness = await db.candidates.aggregate(source_pipeline).to_list(1000)
+        
+        # Score distribution
+        score_ranges = {
+            "excellent": await db.candidates.count_documents({"score": {"$gte": 8}}),
+            "good": await db.candidates.count_documents({"score": {"$gte": 6, "$lt": 8}}),
+            "fair": await db.candidates.count_documents({"score": {"$gte": 4, "$lt": 6}}),
+            "poor": await db.candidates.count_documents({"score": {"$lt": 4}})
+        }
+        
+        # Recent activity
+        recent_candidates = await db.candidates.count_documents({
+            "created_at": {"$gte": datetime.utcnow() - timedelta(days=7)}
+        })
+        recent_applications = await db.applications.count_documents({
+            "applied_at": {"$gte": datetime.utcnow() - timedelta(days=7)}
+        })
+        recent_interviews = await db.interviews.count_documents({
+            "created_at": {"$gte": datetime.utcnow() - timedelta(days=7)}
+        })
+        
+        return {
+            "source_effectiveness": [
+                {
+                    "source": item["_id"],
+                    "candidates": item["candidates"],
+                    "avg_score": round(item["avg_score"], 2) if item["avg_score"] else 0,
+                    "hired": item["hired"],
+                    "conversion_rate": round((item["hired"] / item["candidates"] * 100), 2) if item["candidates"] > 0 else 0
+                }
+                for item in source_effectiveness
+            ],
+            "score_distribution": score_ranges,
+            "recent_activity": {
+                "new_candidates_this_week": recent_candidates,
+                "new_applications_this_week": recent_applications,
+                "interviews_scheduled_this_week": recent_interviews
+            },
+            "generated_at": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logging.error(f"Advanced analytics error: {e}")
+        return {"error": "Failed to generate advanced analytics"}
+
 # Bulk actions
 @api_router.post("/applications/bulk-update")
 async def bulk_update_applications(
