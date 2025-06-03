@@ -1035,7 +1035,16 @@ async def update_job(job_id: str, job_data: JobCreate):
         raise HTTPException(status_code=404, detail="Job not found")
     
     updated_job = await db.jobs.find_one({"id": job_id})
-    return Job(**updated_job)
+    job = Job(**updated_job)
+    
+    # Send webhook to careers site for job update
+    webhook_success = await send_job_webhook(job, "updated")
+    if webhook_success:
+        logging.info(f"Job {job.id} update successfully synced to careers site")
+    else:
+        logging.warning(f"Failed to sync job {job.id} update to careers site")
+    
+    return job
 
 # Candidates
 @api_router.post("/candidates", response_model=Candidate)
