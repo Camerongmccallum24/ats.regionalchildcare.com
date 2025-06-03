@@ -842,6 +842,152 @@ async def generate_compliance_report(
     
     return {}
 
+# Webhook helper functions
+def create_webhook_signature(payload: str, secret: str) -> str:
+    """Create HMAC signature for webhook payload"""
+    return hmac.new(
+        secret.encode('utf-8'),
+        payload.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+
+def format_job_for_webhook(job: Job) -> JobWebhookPayload:
+    """Format job data for careers site webhook"""
+    return JobWebhookPayload(
+        job_id=job.id,
+        title=job.title,
+        location=job.location,
+        description=job.description,
+        requirements=job.requirements,
+        salary_range=job.salary_range,
+        employment_type=job.employment_type,
+        sponsorship_eligible=job.sponsorship_eligible,
+        relocation_support=job.relocation_support,
+        housing_support=job.housing_support,
+        application_url=f"https://childcare-career-hub.lovable.app/apply/{job.id}",
+        posted_date=job.created_at,
+        expires_date=job.created_at + timedelta(days=90),  # Default 90 day expiry
+        status=job.status
+    )
+
+async def send_job_webhook(job: Job, action: str = "created") -> bool:
+    """Send job data to careers site webhook"""
+    try:
+        # Format job data for webhook
+        webhook_payload = format_job_for_webhook(job)
+        
+        # Create payload with metadata
+        payload_data = {
+            "action": action,  # "created", "updated", "deleted"
+            "timestamp": datetime.utcnow().isoformat(),
+            "source": "gro_ats",
+            "job": webhook_payload.dict()
+        }
+        
+        payload_json = json.dumps(payload_data, default=str)
+        
+        # Create signature
+        signature = create_webhook_signature(payload_json, CAREERS_WEBHOOK_SECRET)
+        
+        # Prepare headers
+        headers = {
+            "Content-Type": "application/json",
+            "X-Webhook-Signature": f"sha256={signature}",
+            "X-Webhook-Source": "gro-ats",
+            "X-Webhook-Action": action,
+            "User-Agent": "GRO-ATS-Webhook/1.0"
+        }
+        
+        # Send webhook
+        webhook_url = f"{CAREERS_SITE_URL}/api/webhooks/jobs"
+        
+        async with httpx.AsyncClient(timeout=CAREERS_WEBHOOK_TIMEOUT) as client:
+            response = await client.post(
+                webhook_url,
+                content=payload_json,
+                headers=headers
+            )
+            
+            # Log webhook attempt
+            webhook_log = WebhookLog(
+                webhook_url=webhook_url,
+                payload=payload_data,
+                response_status=response.status_code,
+                response_body=response.text[:1000],  # Truncate long responses
+                job_id=job.id
+            )
+            
+            # Save log to database
+            await db.webhook_logs.insert_one(webhook_log.dict())
+            
+            # Check if successful
+            if 200 <= response.status_code < 300:
+                logging.info(f"Webhook sent successfully for job {job.id}: {response.status_code}")
+                return True
+            else:
+                logging.error(f"Webhook failed for job {job.id}: {response.status_code} - {response.text}")
+                return False
+                
+    except asyncio.TimeoutError:
+        logging.error(f"Webhook timeout for job {job.id}")
+        # Log timeout
+        webhook_log = WebhookLog(
+            webhook_url=webhook_url,
+            payload=payload_data if 'payload_data' in locals() else {},
+            error_message="Timeout error",
+            job_id=job.id
+        )
+        await db.webhook_logs.insert_one(webhook_log.dict())
+        return False
+        
+    except Exception as e:
+        logging.error(f"Webhook error for job {job.id}: {str(e)}")
+        # Log error
+        webhook_log = WebhookLog(
+            webhook_url=webhook_url,
+            payload=payload_data if 'payload_data' in locals() else {},
+            error_message=str(e),
+            job_id=job.id
+        )
+        await db.webhook_logs.insert_one(webhook_log.dict())
+        return False
+
+async def send_job_deletion_webhook(job_id: str) -> bool:
+    """Send job deletion notification to careers site"""
+    try:
+        payload_data = {
+            "action": "deleted",
+            "timestamp": datetime.utcnow().isoformat(),
+            "source": "gro_ats",
+            "job_id": job_id
+        }
+        
+        payload_json = json.dumps(payload_data, default=str)
+        signature = create_webhook_signature(payload_json, CAREERS_WEBHOOK_SECRET)
+        
+        headers = {
+            "Content-Type": "application/json",
+            "X-Webhook-Signature": f"sha256={signature}",
+            "X-Webhook-Source": "gro-ats",
+            "X-Webhook-Action": "deleted",
+            "User-Agent": "GRO-ATS-Webhook/1.0"
+        }
+        
+        webhook_url = f"{CAREERS_SITE_URL}/api/webhooks/jobs"
+        
+        async with httpx.AsyncClient(timeout=CAREERS_WEBHOOK_TIMEOUT) as client:
+            response = await client.post(
+                webhook_url,
+                content=payload_json,
+                headers=headers
+            )
+            
+            return 200 <= response.status_code < 300
+            
+    except Exception as e:
+        logging.error(f"Job deletion webhook error for {job_id}: {str(e)}")
+        return False
+
 # API Routes
 
 # Jobs
