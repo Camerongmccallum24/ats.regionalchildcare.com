@@ -162,7 +162,7 @@ function App() {
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h3 className="text-xl font-semibold text-gray-800 mb-4">Application Pipeline</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {APPLICATION_STATUSES.map(status => (
+          {INTERVIEW_STATUSES.map(status => (
             <div key={status.value} className="text-center">
               <div className="bg-gray-100 p-4 rounded-lg">
                 <p className="text-sm text-gray-600">{status.label}</p>
