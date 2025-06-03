@@ -150,6 +150,54 @@ backend:
         agent: "testing"
         comment: "Database models and schema are correctly implemented. All required enums for locations (Mount Isa, Moranbah, Charters Towers), visa statuses, and application statuses are properly defined. MongoDB integration works correctly with proper document creation, retrieval, and updates. UUID generation for all entities works as expected."
 
+  - task: "Resume Upload and Parsing"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Successfully tested PDF resume upload and parsing. The API correctly extracts text from PDF files, identifies skills from resume content, and updates candidate records with the parsed information. The enhanced scoring algorithm properly recalculates candidate scores based on the extracted skills and information."
+
+  - task: "Visa Sponsorship Evaluation"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Visa sponsorship evaluation API works correctly. The system provides comprehensive eligibility assessment based on candidate profiles, including scoring based on experience, English level, and qualifications. The API returns appropriate visa pathway recommendations (482, 186) and detailed requirements for eligibility."
+
+  - task: "Interview Management"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Interview management APIs function correctly. Successfully tested creating interviews with scheduling, retrieving interviews with filtering by status and candidate, and updating interview status and feedback. The system automatically generates meeting links for video interviews and handles interview invitation emails via SendGrid."
+
+  - task: "Enhanced Candidate Scoring"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Enhanced candidate scoring algorithm works as expected. The system correctly calculates scores based on qualifications, skills, experience, visa status, English level, and rural experience. Bonus points are properly awarded for rural experience and higher-level certifications. Score updates are triggered when candidate data changes, including when resumes are uploaded."
+
 frontend:
   - task: "Complete ATS Frontend Implementation"
     implemented: true
@@ -192,3 +240,5 @@ agent_communication:
     message: "Successfully implemented complete GRO Early Learning ATS core system. Backend includes full CRUD operations for jobs, candidates, and applications with SendGrid email integration. Frontend provides beautiful dashboard and management interfaces. Ready for comprehensive backend testing to verify all API endpoints, email functionality, and data persistence."
   - agent: "testing"
     message: "Completed comprehensive testing of the backend API. All core functionality is working correctly. Successfully tested job management (CRUD), candidate management with scoring algorithm, application processing with status updates and bulk operations, and dashboard statistics API. The database models and schema are correctly implemented with proper enums for locations, visa statuses, and application statuses. SendGrid email integration is properly configured. No critical issues were found during testing."
+  - agent: "testing"
+    message: "Completed testing of Phase 2 features. All new functionality is working correctly. Successfully tested resume upload and parsing, visa sponsorship evaluation, interview management, and enhanced candidate scoring. The system correctly extracts information from PDF resumes, provides comprehensive visa eligibility assessments, manages the full interview lifecycle, and accurately scores candidates based on multiple factors. No critical issues were found during testing."
