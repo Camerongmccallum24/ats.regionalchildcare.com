@@ -25,14 +25,18 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - MONGO_URL=${MONGO_URL}
-      - DB_NAME=${DB_NAME}
-      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
-      - CAREERS_SITE_URL=${CAREERS_SITE_URL}
-      - CAREERS_WEBHOOK_SECRET=${CAREERS_WEBHOOK_SECRET}
-      - SECRET_KEY=${SECRET_KEY}
+      - MONGO_URL=${MONGO_URL:-mongodb+srv://camerongmccallum:qlJuuvzApoAsqQE2@ats.jfoq9p.mongodb.net/?retryWrites=true&w=majority&appName=ATS}
+      - DB_NAME=${DB_NAME:-ATS}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-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}
+      - CAREERS_SITE_URL=${CAREERS_SITE_URL:-https://childcare-career-hub.lovable.app}
+      - CAREERS_WEBHOOK_SECRET=${CAREERS_WEBHOOK_SECRET:-gro-regionalchildcare-webhook-2025}
+      - SECRET_KEY=${SECRET_KEY:-ats-regionalchildcare-secure-secret-key-2025}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DEBUG=${DEBUG:-false}
+      - DOMAIN=${DOMAIN:-ats.regionalchildcare.com}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     env_file:
-      - .env.production
+      - .env
     volumes:
       - ./logs:/app/logs
     networks:
@@ -43,26 +47,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
-  # Optional: Local MongoDB (remove if using MongoDB Atlas)
-  mongodb:
-    image: mongo:6.0
-    container_name: gro_ats_mongodb
-    ports:
-      - "27017:27017"
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
-      - MONGO_INITDB_DATABASE=${DB_NAME}
-    volumes:
-      - mongodb_data:/data/db
-      - ./mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro
-    networks:
-      - gro_ats_network
-    restart: unless-stopped
-
-volumes:
-  mongodb_data:
 
 networks:
   gro_ats_network:
