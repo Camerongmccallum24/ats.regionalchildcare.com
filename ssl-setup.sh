@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # SSL Certificate Setup Script for GRO Early Learning ATS
-# Usage: ./ssl-setup.sh your-domain.com
+# Usage: ./ssl-setup.sh [domain] [email]
 
 set -e
 
@@ -31,11 +31,11 @@ if ! command -v certbot &> /dev/null; then
     
     # For Ubuntu/Debian
     if command -v apt-get &> /dev/null; then
-        sudo apt-get update
-        sudo apt-get install -y certbot
+        apt-get update
+        apt-get install -y certbot
     # For CentOS/RHEL
     elif command -v yum &> /dev/null; then
-        sudo yum install -y certbot
+        yum install -y certbot
     else
         echo -e "${RED}❌ Please install certbot manually${NC}"
         exit 1
@@ -48,7 +48,7 @@ docker-compose -f docker-compose.prod.yml stop frontend
 
 # Generate certificate
 echo -e "${YELLOW}🔐 Generating SSL certificate...${NC}"
-sudo certbot certonly --standalone \
+certbot certonly --standalone \
     --non-interactive \
     --agree-tos \
     --email $EMAIL \
@@ -56,16 +56,16 @@ sudo certbot certonly --standalone \
 
 # Copy certificates to ssl directory
 echo -e "${YELLOW}📋 Copying certificates...${NC}"
-sudo cp /etc/letsencrypt/live/$DOMAIN/fullchain.pem ssl/cert.pem
-sudo cp /etc/letsencrypt/live/$DOMAIN/privkey.pem ssl/key.pem
+cp /etc/letsencrypt/live/$DOMAIN/fullchain.pem ssl/cert.pem
+cp /etc/letsencrypt/live/$DOMAIN/privkey.pem ssl/key.pem
 
 # Set proper permissions
-sudo chown $(whoami):$(whoami) ssl/cert.pem ssl/key.pem
+chown $(whoami):$(whoami) ssl/cert.pem ssl/key.pem 2>/dev/null || true
 chmod 644 ssl/cert.pem
 chmod 600 ssl/key.pem
 
 # Update nginx configuration for SSL
-echo -e "${YELLOW}⚙️ Updating nginx configuration...${NC}"
+echo -e "${YELLOW}⚙️ Updating nginx configuration for SSL...${NC}"
 cat > nginx-ssl.conf << EOF
 events {
     worker_connections 1024;
@@ -146,12 +146,10 @@ http {
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
             
-            # Timeouts
             proxy_connect_timeout 30s;
             proxy_send_timeout 30s;
             proxy_read_timeout 30s;
             
-            # CORS headers for API
             add_header Access-Control-Allow-Origin "*" always;
             add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
             add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With" always;
@@ -161,7 +159,7 @@ http {
             }
         }
         
-        # File upload routes with higher limits
+        # File upload routes
         location /api/candidates/upload-resume {
             limit_req zone=uploads burst=5 nodelay;
             client_max_body_size 10M;
@@ -171,6 +169,10 @@ http {
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
+            
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
         }
         
         location /api/documents/upload {
@@ -182,6 +184,10 @@ http {
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
+            
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
         }
         
         # Frontend static files
@@ -190,10 +196,15 @@ http {
             index index.html index.htm;
             try_files \$uri \$uri/ /index.html;
             
-            # Cache static assets
-            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
                 expires 1y;
                 add_header Cache-Control "public, immutable";
+            }
+            
+            location ~* \.html$ {
+                add_header Cache-Control "no-cache, no-store, must-revalidate";
+                add_header Pragma "no-cache";
+                add_header Expires "0";
             }
         }
         

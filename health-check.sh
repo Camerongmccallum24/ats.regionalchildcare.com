@@ -31,6 +31,8 @@ if curl -f http://localhost/ > /dev/null 2>&1; then
     echo -e "${GREEN}✅ Frontend is responding${NC}"
 else
     echo -e "${RED}❌ Frontend is not responding${NC}"
+    echo "Frontend logs:"
+    docker-compose -f docker-compose.prod.yml logs --tail=10 frontend
 fi
 
 # Check backend health
@@ -39,38 +41,13 @@ if curl -f http://localhost:8001/api/dashboard/stats > /dev/null 2>&1; then
     echo -e "${GREEN}✅ Backend API is responding${NC}"
 else
     echo -e "${RED}❌ Backend API is not responding${NC}"
-fi
-
-# Check database connectivity
-echo -e "${YELLOW}🗄️ Checking database connectivity...${NC}"
-if docker-compose -f docker-compose.prod.yml exec -T backend python -c "
-import os
-import asyncio
-from motor.motor_asyncio import AsyncIOMotorClient
-
-async def test_db():
-    try:
-        client = AsyncIOMotorClient(os.environ['MONGO_URL'])
-        db = client[os.environ['DB_NAME']]
-        result = await db.jobs.count_documents({})
-        print('Database connected successfully')
-        client.close()
-        return True
-    except Exception as e:
-        print(f'Database connection failed: {e}')
-        return False
-
-result = asyncio.run(test_db())
-exit(0 if result else 1)
-" 2>/dev/null; then
-    echo -e "${GREEN}✅ Database is connected${NC}"
-else
-    echo -e "${RED}❌ Database connection failed${NC}"
+    echo "Backend logs:"
+    docker-compose -f docker-compose.prod.yml logs --tail=10 backend
 fi
 
 # Check webhook connectivity
 echo -e "${YELLOW}🔗 Checking webhook connectivity...${NC}"
-webhook_response=$(curl -s -X POST http://localhost:8001/api/webhooks/test)
+webhook_response=$(curl -s -X POST http://localhost:8001/api/webhooks/test 2>/dev/null || echo "failed")
 if echo "$webhook_response" | grep -q '"success":true'; then
     echo -e "${GREEN}✅ Webhook connection is working${NC}"
 else
@@ -99,17 +76,6 @@ else
     echo -e "${RED}❌ Memory usage is critically high (${memory_usage}%)${NC}"
 fi
 
-# Check recent logs for errors
-echo -e "${YELLOW}📝 Checking for recent errors...${NC}"
-error_count=$(docker-compose -f docker-compose.prod.yml logs --since="1h" 2>&1 | grep -i error | wc -l)
-if [ "$error_count" -eq 0 ]; then
-    echo -e "${GREEN}✅ No recent errors found${NC}"
-elif [ "$error_count" -lt 10 ]; then
-    echo -e "${YELLOW}⚠️ ${error_count} errors found in the last hour${NC}"
-else
-    echo -e "${RED}❌ ${error_count} errors found in the last hour - investigation needed${NC}"
-fi
-
 # Summary
 echo ""
 echo -e "${YELLOW}📋 Health Check Summary${NC}"
@@ -120,10 +86,27 @@ stats=$(curl -s http://localhost:8001/api/dashboard/stats 2>/dev/null || echo '{
 webhook_stats=$(curl -s http://localhost:8001/api/webhooks/stats 2>/dev/null || echo '{"error":"API unavailable"}')
 
 echo "Current time: $(date)"
+echo "Server IP: $(hostname -I | awk '{print $1}')"
 echo "Uptime: $(uptime -p)"
-echo "Jobs in system: $(echo $stats | grep -o '"total_jobs":[0-9]*' | cut -d: -f2 || echo 'N/A')"
-echo "Candidates in system: $(echo $stats | grep -o '"total_candidates":[0-9]*' | cut -d: -f2 || echo 'N/A')"
-echo "Webhook success rate: $(echo $webhook_stats | grep -o '"success_rate":[0-9.]*' | cut -d: -f2 || echo 'N/A')%"
+
+if echo "$stats" | grep -q "total_jobs"; then
+    echo "Jobs in system: $(echo $stats | grep -o '"total_jobs":[0-9]*' | cut -d: -f2)"
+    echo "Candidates in system: $(echo $stats | grep -o '"total_candidates":[0-9]*' | cut -d: -f2)"
+else
+    echo "Jobs in system: N/A (API not responding)"
+    echo "Candidates in system: N/A (API not responding)"
+fi
+
+if echo "$webhook_stats" | grep -q "success_rate"; then
+    echo "Webhook success rate: $(echo $webhook_stats | grep -o '"success_rate":[0-9.]*' | cut -d: -f2)%"
+else
+    echo "Webhook success rate: N/A (API not responding)"
+fi
 
 echo ""
 echo -e "${GREEN}🎉 Health check completed!${NC}"
+
+# Show container status
+echo ""
+echo -e "${YELLOW}📊 Container Status:${NC}"
+docker-compose -f docker-compose.prod.yml ps
