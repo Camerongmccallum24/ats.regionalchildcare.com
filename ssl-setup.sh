@@ -5,8 +5,8 @@
 
 set -e
 
-DOMAIN=${1:-"your-domain.com"}
-EMAIL=${2:-"admin@groearlylearning.com"}
+DOMAIN=${1:-"ats.regionalchildcare.com"}
+EMAIL=${2:-"admin@regionalchildcare.com"}
 
 # Colors
 GREEN='\033[0;32m'
