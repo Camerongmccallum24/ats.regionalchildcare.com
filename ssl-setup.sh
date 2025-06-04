@@ -17,10 +17,9 @@ NC='\033[0m'
 echo -e "${YELLOW}🔒 Setting up SSL certificate for ${DOMAIN}...${NC}"
 
 # Check if domain is provided
-if [ "$DOMAIN" = "your-domain.com" ]; then
-    echo -e "${RED}❌ Please provide your actual domain name${NC}"
-    echo "Usage: ./ssl-setup.sh your-actual-domain.com"
-    exit 1
+if [ "$DOMAIN" = "ats.regionalchildcare.com" ] && [ $# -eq 0 ]; then
+    echo -e "${YELLOW}Using default domain: ${DOMAIN}${NC}"
+    echo "If this is not correct, run: ./ssl-setup.sh your-actual-domain.com"
 fi
 
 # Create SSL directory
