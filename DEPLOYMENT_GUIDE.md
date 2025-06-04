@@ -422,11 +422,11 @@ curl https://your-domain.com/api/webhooks/stats
 
 ## 🔗 Useful URLs After Deployment
 
-- **Frontend**: https://your-domain.com
-- **Backend API**: https://your-domain.com/api
-- **Health Check**: https://your-domain.com/health
-- **API Documentation**: https://your-domain.com/api/docs (if enabled)
-- **Webhook Stats**: https://your-domain.com/api/webhooks/stats
+- **Frontend**: https://ats.regionalchildcare.com
+- **Backend API**: https://ats.regionalchildcare.com/api
+- **Health Check**: https://ats.regionalchildcare.com/health
+- **API Documentation**: https://ats.regionalchildcare.com/api/docs (if enabled)
+- **Webhook Stats**: https://ats.regionalchildcare.com/api/webhooks/stats
 
 ## 💰 Cost Estimation
 
