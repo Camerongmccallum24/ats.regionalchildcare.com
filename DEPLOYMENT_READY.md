@@ -29,10 +29,10 @@ gro-ats/
 ### **Option 1: Super Quick Deploy (Recommended)**
 ```bash
 # Upload files to Digital Ocean droplet
-scp -r gro-ats root@your_droplet_ip:/home/
+scp -r gro-ats root@178.62.18.184:/home/
 
 # SSH and run one command
-ssh root@your_droplet_ip
+ssh root@178.62.18.184
 cd /home/gro-ats && ./quick-deploy.sh
 ```
 
