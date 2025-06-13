@@ -4,7 +4,7 @@ ARG FRONTEND_ENV
 ENV FRONTEND_ENV=${FRONTEND_ENV}
 WORKDIR /app
 COPY frontend/ /app/
-RUN rm /app/.env
+RUN [ -f /app/.env ] && rm /app/.env || true
 RUN touch /app/.env
 RUN echo "${FRONTEND_ENV}" | tr ',' '\n' > /app/.env
 RUN cat /app/.env
@@ -14,7 +14,7 @@ RUN yarn install --frozen-lockfile && yarn build
 FROM python:3.11-slim as backend
 WORKDIR /app
 COPY backend/ /app/
-RUN rm /app/.env
+RUN [ -f /app/.env ] && rm /app/.env || true
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Stage 3: Final Image
