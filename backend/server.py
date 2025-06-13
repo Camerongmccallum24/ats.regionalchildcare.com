@@ -37,20 +37,6 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "default-secret-key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# PostgreSQL Connection Pool
-DATABASE_URL=postgresql://{os.environ['DB_USERNAME']}:{os.environ['DB_PASSWORD']}@{os.environ['DB_HOST']}:{os.environ['DB_PORT']}/{os.environ['DB_DATABASE']}?sslmode={os.environ['DB_SSLMODE']}
-
-pool: Optional[asyncpg.Pool] = None
-
-async def create_db_pool():
-    global pool
-    pool = await asyncpg.create_pool(DATABASE_URL)
-
-async def close_db_pool():
-    global pool
-    if pool:
-        await pool.close()
-
 # SendGrid setup
 sg = sendgrid.SendGridAPIClient(api_key=os.environ.get('SENDGRID_API_KEY'))
 
