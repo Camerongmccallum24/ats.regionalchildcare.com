@@ -37,9 +37,6 @@ services:
       SECRET_KEY: ${SECRET_KEY} # Using the provided SECRET_KEY env var
       ATS_DOMAIN: ${ATS_DOMAIN}
 
-      # SendGrid Email Configuration
-      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
-
       # Careers Site Integration
       CAREERS_SITE_URL: ${CAREERS_SITE_URL}
       CAREERS_WEBHOOK_SECRET: ${CAREERS_WEBHOOK_SECRET}
