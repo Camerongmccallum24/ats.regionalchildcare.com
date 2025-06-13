@@ -25,25 +25,40 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - MONGO_URL=${MONGO_URL:-mongodb+srv://camerongmccallum:qlJuuvzApoAsqQE2@ats.jfoq9p.mongodb.net/?retryWrites=true&w=majority&appName=ATS}
-      - DB_NAME=${DB_NAME:-ATS}
-      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-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}
-      - CAREERS_SITE_URL=${CAREERS_SITE_URL:-https://childcare-career-hub.lovable.app}
-      - CAREERS_WEBHOOK_SECRET=${CAREERS_WEBHOOK_SECRET:-gro-regionalchildcare-webhook-2025}
-      - SECRET_KEY=${SECRET_KEY:-ats-regionalchildcare-secure-secret-key-2025}
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DEBUG=${DEBUG:-false}
-      - DOMAIN=${DOMAIN:-ats.regionalchildcare.com}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # PostgreSQL Configuration (using your provided environment variable names)
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_SSLMODE: ${DB_SSLMODE}
+
+      # Application Configuration
+      SECRET_KEY: ${SECRET_KEY} # Using the provided SECRET_KEY env var
+      ATS_DOMAIN: ${ATS_DOMAIN}
+
+      # SendGrid Email Configuration
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+
+      # Careers Site Integration
+      CAREERS_SITE_URL: ${CAREERS_SITE_URL}
+      CAREERS_WEBHOOK_SECRET: ${CAREERS_WEBHOOK_SECRET}
+
+      ENVIRONMENT: production
+      DEBUG: false
+      LOG_LEVEL: INFO
+
     env_file:
-      - .env
+      - .env # Ensure your .env file is correctly configured with the above variables
+
     volumes:
-      - ./logs:/app/logs
+      - ./logs:/app/logs # Assuming you still want log persistence
+
     networks:
       - gro_ats_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/api/dashboard/stats"]
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/dashboard/stats"] # Adjust if your health check endpoint changes
       interval: 30s
       timeout: 10s
       retries: 3
